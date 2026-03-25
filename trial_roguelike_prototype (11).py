@@ -3,6 +3,7 @@ import random
 import tkinter as tk
 from dataclasses import dataclass
 from typing import List, Dict
+from PIL import Image, ImageTk
 
 BG = '#16111f'
 PANEL = '#2a1d33'
@@ -73,27 +74,61 @@ class Game:
         self.sidebar_boost = False
         self.foundation_active = False
         self.played_this_turn = []
+        self.last_card_played = None
+        self.reroll_count = 0
         self.turn = 1
         self.deck = self.starter_deck()
         random.shuffle(self.deck)
         self.discard = []
         self.hand = []
         self.log = []
+        self.floating_damages = []  # {damage, x, y, age}
         self.dialogue = ('BAILIFF', 'Act I — The Story Gets Built', 'Opposing counsel wants to build a clean story. Watch for TESTIMONY, create EXPOSED, then IMPEACH.')
         self.enemy_name = 'THE SHOWBOAT'
         self.enemy_intent = self.roll_intent()
+        self.next_intent = self.roll_intent()
         self.draw(5)
         self.started = False
 
+    def get_intent_weights(self):
+        """Return weighted probabilities for each intent based on current state."""
+        return {
+            'direct_exam': 25,          # Base 20% - common opening
+            'polish_story': 20,         # Base 17% - defensive
+            'grandstanding': 20,        # Base 17% - aggressive
+            'overprepare': 20,          # Base 17% - combo setup
+            'cheap_shot': 15,           # Base 12% - high risk
+        }
+    
     def roll_intent(self):
-        intents = [
-            Intent('direct_exam', 'Direct Examination', 'Tell the jury what happened.', 'Creates TESTIMONY LIVE. This enables your contradiction cards.', 'testimony'),
-            Intent('polish_story', 'Polish the Story', 'Let\'s keep this simple.', 'Gains SYMPATHY, which softens your pressure.', 'sympathy', 1),
-            Intent('grandstanding', 'Grandstanding', 'Counsel can posture all they like.', 'Deals 7 pressure and annoys the judge.', 'attack', 7),
-            Intent('overprepare', 'Overprepare the Witness', 'We reviewed this very carefully.', 'Creates TESTIMONY; Gains 1 SYMPATHY.', 'testimony_plus', 1),
-            Intent('cheap_shot', 'Cheap Shot', 'Try to keep up.', 'Deals 9 pressure.', 'attack', 9),
-        ]
-        return random.choice(intents)
+        """Roll a random intent weighted by probabilities."""
+        intents_map = {
+            'direct_exam': Intent('direct_exam', 'Direct Examination', 'Tell the jury what happened.', 'Creates TESTIMONY LIVE. This enables your contradiction cards.', 'testimony'),
+            'polish_story': Intent('polish_story', 'Polish the Story', 'Let\'s keep this simple.', 'Gains SYMPATHY, which softens your pressure.', 'sympathy', 1),
+            'grandstanding': Intent('grandstanding', 'Grandstanding', 'Counsel can posture all they like.', 'Deals 7 pressure and annoys the judge.', 'attack', 7),
+            'overprepare': Intent('overprepare', 'Overprepare the Witness', 'We reviewed this very carefully.', 'Creates TESTIMONY; Gains 1 SYMPATHY.', 'testimony_plus', 1),
+            'cheap_shot': Intent('cheap_shot', 'Cheap Shot', 'Try to keep up.', 'Deals 9 pressure.', 'attack', 9),
+        }
+        weights = self.get_intent_weights()
+        choice = random.choices(list(intents_map.keys()), weights=list(weights.values()), k=1)[0]
+        return intents_map[choice]
+    
+    def get_intent_probabilities(self):
+        """Return probabilities as percentages for display."""
+        weights = self.get_intent_weights()
+        total = sum(weights.values())
+        return {k: round((v / total) * 100) for k, v in weights.items()}
+    
+    def reroll_next_intent(self):
+        """Spend Judge Patience to reroll the next intent."""
+        cost = 3
+        if self.judge_patience < cost:
+            self.add_log(f'Not enough Judge Patience! Need {cost}, have {self.judge_patience}.')
+            return False
+        self.judge_patience -= cost
+        self.next_intent = self.roll_intent()
+        self.add_log(f'Rerolled next intent! Judge Patience −{cost}.')
+        return True
 
     def draw(self, n):
         for _ in range(n):
@@ -127,6 +162,9 @@ class Game:
             self.enemy_shield -= shield_block
             amount -= shield_block
         self.enemy_cred = max(0, self.enemy_cred - amount)
+        # Create floating damage indicator
+        if amount > 0:
+            self.floating_damages.append({'damage': amount, 'age': 0})
         return (amount, sympathy_block, shield_block, original)
 
     def deal_to_player(self, amount):
@@ -150,6 +188,12 @@ class Game:
         self.hand.pop(idx)
         self.discard.append(card.id)
         self.played_this_turn.append(card.id)
+        
+        # Play sound effect
+        try:
+            self.root.bell() if hasattr(self, 'root') else None
+        except:
+            pass
 
         if card.id == 'press_witness':
             dmg = 6 + (2 if self.testimony_live else 0)
@@ -192,13 +236,20 @@ class Game:
         elif card.id == 'prior_statement':
             if self.testimony_live:
                 self.exposed = True
-                self.add_log('TESTIMONY is now EXPOSED.')
-                self.set_dialogue('YOU', 'That is not what was said before.', 'EXPOSED means the story has cracked. Now cash it out with Impeach.')
+                self.last_card_played = 'prior_statement'
+                self.add_log('TESTIMONY is now EXPOSED. ‖ Impeach next for COMBO BONUS!')
+                self.set_dialogue('YOU', 'That is not what was said before.', 'EXPOSED means the story has cracked. Impeach next for +3 COMBO!')
             else:
                 self.add_log('No live testimony to challenge.')
+                self.last_card_played = None
 
         elif card.id == 'impeach':
             dmg = 10
+            combo_bonus = 0
+            # Combo: Prior Statement → Impeach gives +3 damage
+            if self.last_card_played == 'prior_statement' and self.exposed:
+                dmg += 3
+                combo_bonus = 3
             if self.exposed:
                 dmg += 5
                 self.exposed = False
@@ -207,6 +258,8 @@ class Game:
                 self.sidebar_boost = False
             actual, sympathy_block, shield_block, original = self.deal_to_enemy(dmg)
             log_msg = f'Impeach: {original} damage.'
+            if combo_bonus > 0:
+                log_msg += f' (+{combo_bonus} COMBO BONUS!)'
             if sympathy_block > 0:
                 log_msg += f' {sympathy_block} blocked by SYMPATHY.'
             if shield_block > 0:
@@ -251,6 +304,7 @@ class Game:
     def end_turn(self):
         if not self.started or self.enemy_cred <= 0 or self.player_cred <= 0:
             return
+        self.last_card_played = None  # Reset combo tracker
         intent = self.enemy_intent
         self.set_dialogue(self.enemy_name, intent.bark, intent.caption)
         self.add_log(f'{self.enemy_name} uses {intent.name}.')
@@ -281,9 +335,12 @@ class Game:
         self.objection_reduction = 0.0
         self.sidebar_boost = False
         self.played_this_turn = []
+        self.last_card_played = None
+        self.reroll_count = 0
         self.focus = self.max_focus
         self.turn += 1
-        self.enemy_intent = self.roll_intent()
+        self.enemy_intent = self.next_intent
+        self.next_intent = self.roll_intent()
         self.draw(5 - len(self.hand))
 
         if self.player_cred <= 0:
@@ -297,25 +354,56 @@ class App:
         self.root.title('STRIKE FROM THE RECORD // ACT I PROTOTYPE')
         self.root.configure(bg=BG)
         self.game = Game()
+        self.game.root = self.root  # Pass root for sound effects
         self.scene_img = None
         self.build_ui()
+        # Load scene image after window is rendered
+        self.root.after(100, self.load_scene)
         self.refresh()
 
     def panel(self, parent, **kwargs):
-        return tk.Frame(parent, bg=PANEL, highlightbackground=ACCENT, highlightthickness=2, **kwargs)
+        return tk.Frame(parent, bg=PANEL, highlightbackground=ACCENT, highlightthickness=1, **kwargs)
+
+    def create_rounded_panel(self, parent, **pack_kwargs):
+        """Create a properly functioning rounded panel that doesn't have text overflow issues.
+        Returns just the inner frame where content should be added."""
+        # Outer container for border effect (accent-colored)
+        outer = tk.Frame(parent, bg=ACCENT, relief='flat', borderwidth=0)
+        outer.pack(**pack_kwargs)
+        
+        # Inner panel (actual content area)
+        inner = tk.Frame(outer, bg=PANEL)
+        inner.pack(fill='both', expand=True, padx=2, pady=2)
+        
+        return inner
 
     def build_ui(self):
         self.root.geometry('1600x1000')
         self.root.minsize(1400, 900)
+        self.root.config(bg=BG)
 
-        self.top = tk.Frame(self.root, bg=BG)
-        self.top.pack(fill='x', padx=10, pady=8)
+        # ===== FULLSCREEN BACKGROUND LAYER =====
+        bg_frame = tk.Frame(self.root, bg=BG)
+        bg_frame.place(x=0, y=0, relwidth=1, relheight=1)
 
-        self.banner = tk.Label(self.top, text='COURT FEED // ACT I — THE STORY GETS BUILT', bg=BG, fg=ACCENT, font=('Courier', 22, 'bold'))
-        self.banner.pack(anchor='w')
+        self.scene_label = tk.Label(bg_frame, bg=BG)
+        self.scene_label.place(x=0, y=0, relwidth=1, relheight=1)
+        # Image will be loaded after window renders via after() in __init__
 
-        self.main = tk.Frame(self.root, bg=BG)
-        self.main.pack(fill='both', expand=True, padx=10, pady=8)
+        # ===== UI OVERLAY LAYER =====
+        overlay_container = tk.Frame(self.root, bg=BG)
+        overlay_container.place(x=0, y=0, relwidth=1, relheight=1)
+
+        # TOP: Banner
+        self.top = tk.Frame(overlay_container, bg='#1a1410', relief='flat', borderwidth=0)
+        self.top.place(x=0, y=0, relwidth=1, height=60)
+
+        self.banner = tk.Label(self.top, text='COURT FEED // ACT I — THE STORY GETS BUILT', bg='#1a1410', fg=ACCENT, font=('Courier', 20, 'bold'))
+        self.banner.place(x=15, y=8)
+
+        # MAIN: Grid-based UI on top of background
+        self.main = tk.Frame(overlay_container, bg=BG)
+        self.main.place(x=0, y=60, relwidth=1, relheight=1)
         self.main.columnconfigure(0, weight=1)  # Left: Stats
         self.main.columnconfigure(1, weight=2)  # Middle: Scene + Action + Cards
         self.main.columnconfigure(2, weight=1)  # Right: Trial Record
@@ -324,123 +412,165 @@ class App:
 
         # ===== LEFT COLUMN: STATS =====
         self.left_stats = tk.Frame(self.main, bg=BG)
-        self.left_stats.grid(row=0, column=0, rowspan=2, sticky='nsew', padx=(0, 8), pady=(0, 8))
+        self.left_stats.grid(row=0, column=0, rowspan=2, sticky='nsew', padx=(0, 6), pady=(0, 6))
         self.left_stats.columnconfigure(0, weight=1)
 
         # Player stats
-        self.player_panel = self.panel(self.left_stats)
-        self.player_panel.pack(fill='x', pady=(0, 8))
-        self.player_stats = tk.Label(self.player_panel, bg=PANEL, fg=TEXT, justify='left', font=('Courier', 13, 'bold'))
+        self.player_panel = self.create_rounded_panel(self.left_stats, fill='x', pady=(0, 6))
+        self.player_stats = tk.Label(self.player_panel, bg=PANEL, fg=TEXT, justify='left', font=('Courier', 12, 'bold'))
         self.player_stats.pack(anchor='w', padx=10, pady=10)
 
         # Enemy stats
-        self.enemy_panel = self.panel(self.left_stats)
-        self.enemy_panel.pack(fill='x', pady=(0, 8))
-        self.enemy_stats = tk.Label(self.enemy_panel, bg=PANEL, fg=TEXT, justify='left', font=('Courier', 13, 'bold'))
+        self.enemy_panel = self.create_rounded_panel(self.left_stats, fill='x', pady=(0, 6))
+        self.enemy_stats = tk.Label(self.enemy_panel, bg=PANEL, fg=TEXT, justify='left', font=('Courier', 11, 'bold'))
         self.enemy_stats.pack(anchor='w', padx=10, pady=10)
 
         # Combat state
-        self.state_panel = self.panel(self.left_stats)
-        self.state_panel.pack(fill='x', pady=(0, 8))
-        self.state_stats = tk.Label(self.state_panel, bg=PANEL, fg=TEXT, justify='left', font=('Courier', 12, 'bold'))
+        self.state_panel = self.create_rounded_panel(self.left_stats, fill='x', pady=(0, 6))
+        self.state_stats = tk.Label(self.state_panel, bg=PANEL, fg=TEXT, justify='left', font=('Courier', 11, 'bold'))
         self.state_stats.pack(anchor='w', padx=10, pady=10)
 
         # Hint/guidance
-        self.hint_panel = self.panel(self.left_stats)
-        self.hint_panel.pack(fill='both', expand=True)
-        self.hint_text = tk.Label(self.hint_panel, bg=PANEL, fg=MUTED, justify='left', font=('Courier', 11), wraplength=180)
+        self.hint_panel = self.create_rounded_panel(self.left_stats, fill='both', expand=True)
+        self.hint_text = tk.Label(self.hint_panel, bg=PANEL, fg=MUTED, justify='left', font=('Courier', 10), wraplength=180)
         self.hint_text.pack(anchor='nw', padx=10, pady=10)
 
         # ===== MIDDLE COLUMN: SCENE + ACTION + CARDS =====
         self.middle = tk.Frame(self.main, bg=BG)
-        self.middle.grid(row=0, column=1, sticky='nsew', padx=(0, 8), pady=(0, 8))
+        self.middle.grid(row=0, column=1, sticky='nsew', padx=(0, 6), pady=(0, 6))
         self.middle.columnconfigure(0, weight=1)
-        self.middle.rowconfigure(0, weight=1)
-        self.middle.rowconfigure(1, weight=0)
-        self.middle.rowconfigure(2, weight=0)
+        self.middle.rowconfigure(0, weight=2)  # Scene expands more
+        self.middle.rowconfigure(1, weight=0)  # Odds alert fixed
+        self.middle.rowconfigure(2, weight=1)  # Hand expands to take space
 
-        # Scene and transcript
-        self.scene_panel = self.panel(self.middle)
+        # Scene image panel (now just shows the background)
+        self.scene_panel = tk.Frame(self.middle, bg=BG)
         self.scene_panel.grid(row=0, column=0, sticky='nsew', padx=0, pady=0)
         self.scene_panel.rowconfigure(0, weight=1)
         self.scene_panel.columnconfigure(0, weight=1)
 
-        self.scene_label = tk.Label(self.scene_panel, bg=PANEL)
-        self.scene_label.grid(row=0, column=0, sticky='nsew', padx=8, pady=8)
-        self.load_scene()
-
-        self.transcript = tk.Frame(self.scene_panel, bg=PANEL2)
-        self.transcript.grid(row=1, column=0, sticky='ew', padx=8, pady=(0, 8))
-        self.speaker = tk.Label(self.transcript, text='', bg=PANEL2, fg=ACCENT, font=('Courier', 14, 'bold'))
+        # Transcript with rounded effect
+        transcript_outer = tk.Frame(self.scene_panel, bg=ACCENT, relief='flat', borderwidth=0)
+        transcript_outer.grid(row=1, column=0, sticky='ew', padx=6, pady=(0, 6))
+        self.transcript = tk.Frame(transcript_outer, bg=PANEL)
+        self.transcript.pack(fill='both', padx=2, pady=2)
+        self.speaker = tk.Label(self.transcript, text='', bg=PANEL, fg=ACCENT, font=('Courier', 13, 'bold'))
         self.speaker.pack(anchor='w', padx=10, pady=(8, 0))
-        self.bark = tk.Label(self.transcript, text='', bg=PANEL2, fg=TEXT, font=('Courier', 16, 'bold'), wraplength=600, justify='left')
-        self.bark.pack(anchor='w', padx=10)
-        self.caption = tk.Label(self.transcript, text='', bg=PANEL2, fg=MUTED, font=('Courier', 11), wraplength=600, justify='left')
+        self.bark = tk.Label(self.transcript, text='', bg=PANEL, fg=TEXT, font=('Courier', 15, 'bold'), wraplength=550, justify='left')
+        self.bark.pack(anchor='w', padx=10, pady=4)
+        self.caption = tk.Label(self.transcript, text='', bg=PANEL, fg=MUTED, font=('Courier', 10), wraplength=550, justify='left')
         self.caption.pack(anchor='w', padx=10, pady=(0, 8))
 
-        # Action summary (what happened this turn)
-        self.action_summary = self.panel(self.middle)
-        self.action_summary.grid(row=1, column=0, sticky='ew', padx=0, pady=(8, 8))
-        self.action_text = tk.Label(self.action_summary, text='', bg=PANEL, fg=GOOD, font=('Courier', 11, 'bold'), wraplength=550, justify='left')
-        self.action_text.pack(anchor='nw', padx=10, pady=8)
+        # Probability display with rounded effect
+        prob_outer = tk.Frame(self.middle, bg=ACCENT, relief='flat', borderwidth=0)
+        prob_outer.grid(row=1, column=0, sticky='ew', padx=0, pady=(6, 6))
+        self.prob_alert = tk.Frame(prob_outer, bg=PANEL)
+        self.prob_alert.pack(fill='both', padx=2, pady=2)
+        
+        prob_title = tk.Label(self.prob_alert, text='⚡ NEXT TURN ODDS ⚡', bg=PANEL, fg=ACCENT, font=('Courier', 12, 'bold'))
+        prob_title.pack(anchor='center', pady=(8, 2))
+        
+        self.prob_text = tk.Label(self.prob_alert, text='', bg=PANEL, fg=GOOD, font=('Courier', 10, 'bold'), justify='center')
+        self.prob_text.pack(anchor='center', padx=10, pady=(2, 4))
+        
+        self.reroll_hint = tk.Label(self.prob_alert, text='(Spend 3 Judge Patience to reroll)', bg=PANEL, fg=MUTED, font=('Courier', 9, 'italic'))
+        self.reroll_hint.pack(anchor='center', pady=(0, 8))
 
-        # Hand
+        # Hand (now expands to fill space)
         self.hand_section = tk.Frame(self.middle, bg=BG)
-        self.hand_section.grid(row=2, column=0, sticky='ew', padx=0, pady=(8, 0))
+        self.hand_section.grid(row=2, column=0, sticky='nsew', padx=0, pady=(6, 0))
         self.hand_section.columnconfigure(0, weight=1)
+        self.hand_section.rowconfigure(2, weight=1)  # Expand card frame
 
-        self.hand_title = tk.Label(self.hand_section, text='YOUR HAND // BUILD PATTERNS, BREAK CREDIBILITY', bg=BG, fg=ACCENT, font=('Courier', 14, 'bold'))
-        self.hand_title.pack(anchor='w', padx=0, pady=(0, 4))
+        # Hand title with deck info
+        title_frame = tk.Frame(self.hand_section, bg=BG)
+        title_frame.grid(row=0, column=0, sticky='ew', padx=0, pady=(0, 3))
+        title_frame.columnconfigure(0, weight=1)
+        
+        self.hand_title = tk.Label(title_frame, text='YOUR HAND // BUILD PATTERNS, BREAK CREDIBILITY', bg=BG, fg=ACCENT, font=('Courier', 14, 'bold'))
+        self.hand_title.pack(anchor='w', padx=0, side='left')
+        
+        self.deck_info = tk.Label(title_frame, text='', bg=BG, fg=MUTED, font=('Courier', 11, 'bold'))
+        self.deck_info.pack(anchor='e', padx=0, side='right')
+        
         self.hand_frame = tk.Frame(self.hand_section, bg=BG)
-        self.hand_frame.pack(fill='x', padx=0)
+        self.hand_frame.grid(row=2, column=0, sticky='nsew', padx=0)
 
         # ===== RIGHT COLUMN: TRIAL RECORD =====
         self.right = tk.Frame(self.main, bg=BG)
         self.right.grid(row=0, column=2, rowspan=2, sticky='nsew')
         self.right.columnconfigure(0, weight=1)
-        self.right.rowconfigure(0, weight=0)
-        self.right.rowconfigure(1, weight=1)
+        self.right.rowconfigure(0, weight=0)  # Overlay
+        self.right.rowconfigure(1, weight=1)  # Combat log expands
+        self.right.rowconfigure(2, weight=0)  # Reroll button
 
-        self.overlay = self.panel(self.right)
-        self.overlay.grid(row=0, column=0, sticky='ew', pady=(0, 8))
-        tk.Label(self.overlay, text='ENCOUNTER START // THE SHOWBOAT', bg=PANEL, fg=ACCENT, font=('Courier', 16, 'bold')).pack(anchor='w', padx=10, pady=(10, 4))
-        tk.Label(self.overlay, text='FIRST PATTERN: Wait for TESTIMONY LIVE → PRIOR STATEMENT → IMPEACH.', bg=PANEL, fg=INFO, font=('Courier', 10, 'bold'), wraplength=280, justify='left').pack(anchor='w', padx=10, pady=(4, 4))
-        self.start_btn = tk.Button(self.overlay, text='BEGIN CROSS', command=self.begin_cross, bg=ACCENT, fg=BG, font=('Courier', 14, 'bold'), relief='flat')
-        self.start_btn.pack(anchor='w', padx=10, pady=(4, 10))
+        # Overlay with rounded effect
+        overlay_outer = tk.Frame(self.right, bg=ACCENT, relief='flat', borderwidth=0)
+        overlay_outer.grid(row=0, column=0, sticky='ew', pady=(0, 6))
+        self.overlay = tk.Frame(overlay_outer, bg=PANEL)
+        self.overlay.pack(fill='both', padx=2, pady=2)
+        tk.Label(self.overlay, text='ENCOUNTER START // THE SHOWBOAT', bg=PANEL, fg=ACCENT, font=('Courier', 14, 'bold')).pack(anchor='w', padx=10, pady=(10, 4))
+        tk.Label(self.overlay, text='FIRST PATTERN: Wait for TESTIMONY LIVE → PRIOR STATEMENT → IMPEACH.', bg=PANEL, fg=INFO, font=('Courier', 9, 'bold'), wraplength=280, justify='left').pack(anchor='w', padx=10, pady=(0, 6))
+        self.start_btn = tk.Button(self.overlay, text='BEGIN CROSS', command=self.begin_cross, bg=ACCENT, fg=BG, font=('Courier', 12, 'bold'), relief='flat')
+        self.start_btn.pack(anchor='w', padx=10, pady=(0, 10), fill='x')
 
-        # Trial record log
-        self.trial_record_title = tk.Label(self.right, text='TRIAL RECORD // FIGHT HISTORY', bg=BG, fg=ACCENT, font=('Courier', 13, 'bold'))
-        self.trial_record_title.grid(row=0, column=0, sticky='w', padx=0, pady=(8, 4))
+        # Combat log in right column
+        self.combat_log_section = tk.Frame(self.right, bg=BG)
+        self.combat_log_section.grid(row=1, column=0, sticky='nsew', padx=0, pady=(6, 6))
+        
+        log_title = tk.Label(self.combat_log_section, text='COMBAT LOG // RECENT MOVES', bg=BG, fg=ACCENT, font=('Courier', 10, 'bold'))
+        log_title.pack(anchor='w', padx=0, pady=(0, 4))
+        
+        # Combat log box with rounded effect
+        log_outer = tk.Frame(self.combat_log_section, bg=ACCENT, relief='flat', borderwidth=0)
+        log_outer.pack(fill='both', expand=True)
+        log_box = tk.Frame(log_outer, bg=PANEL)
+        log_box.pack(fill='both', expand=True, padx=2, pady=2)
+        
+        self.combat_log_text = tk.Label(log_box, text='', bg=PANEL, fg=TEXT, font=('Courier', 9), justify='left', anchor='nw')
+        self.combat_log_text.pack(fill='both', expand=True, padx=8, pady=8)
 
-        self.trial_record_box = self.panel(self.right)
-        self.trial_record_box.grid(row=1, column=0, sticky='nsew', padx=0, pady=0)
-        self.trial_record_box.rowconfigure(0, weight=1)
-        self.trial_record_box.columnconfigure(0, weight=1)
-
-        self.trial_record_text = tk.Label(self.trial_record_box, text='', bg=PANEL2, fg=MUTED, font=('Courier', 9), justify='left', anchor='nw')
-        self.trial_record_text.pack(fill='both', expand=True, padx=8, pady=8)
+        # Reroll button at bottom of right panel
+        self.reroll_btn = tk.Button(self.right, text='⚡ REROLL NEXT TURN (Cost: 3 Patience) ⚡', command=self.reroll_next, bg=WARN, fg='#000000', font=('Courier', 10, 'bold'), relief='flat', borderwidth=0)
+        self.reroll_btn.grid(row=2, column=0, sticky='ew', padx=0, pady=(6, 0))
 
         # Bottom: controls
-        self.bottom = tk.Frame(self.root, bg=BG)
-        self.bottom.pack(fill='x', padx=10, pady=8)
+        self.bottom = tk.Frame(overlay_container, bg=BG)
+        self.bottom.place(x=0, y=-60, relwidth=1, height=60, anchor='sw')
 
         self.controls = self.panel(self.bottom)
-        self.controls.pack(fill='x')
+        self.controls.pack(fill='x', side='bottom')
         tk.Button(self.controls, text='END TURN', command=self.end_turn, bg=ACCENT, fg=BG, font=('Courier', 14, 'bold'), relief='flat').pack(side='left', padx=10, pady=10)
         tk.Button(self.controls, text='RESTART', command=self.restart, bg=PANEL2, fg=TEXT, font=('Courier', 14, 'bold'), relief='flat').pack(side='left', padx=10, pady=10)
 
+
+
     def load_scene(self):
+        """Load and scale the courtroom image to fullscreen background."""
         img_path = os.path.join(os.path.dirname(__file__), 'courtroom_scene.png')
-        if os.path.exists(img_path):
-            try:
-                self.scene_img = tk.PhotoImage(file=img_path)
-                # Scale to fit most screens.
-                self.scene_img = self.scene_img.subsample(3, 3)
-                self.scene_label.configure(image=self.scene_img)
-            except Exception:
-                self.scene_label.configure(text='[ court scene unavailable ]', fg=MUTED, font=('Courier', 18, 'bold'))
-        else:
-            self.scene_label.configure(text='[ court scene missing ]', fg=MUTED, font=('Courier', 18, 'bold'))
+        if not os.path.exists(img_path):
+            self.scene_label.config(text='[ courtroom_scene.png not found ]', fg=MUTED, font=('Courier', 18, 'bold'))
+            return
+            
+        try:
+            # Get actual window size
+            w = self.root.winfo_width()
+            h = self.root.winfo_height()
+            
+            # If window not yet sized, use sensible defaults
+            if w < 100 or h < 100:
+                w, h = 1600, 1000
+            
+            # Load and resize image
+            img = Image.open(img_path).convert('RGB')
+            img_resized = img.resize((w, h), Image.Resampling.LANCZOS)
+            
+            # Store reference and display
+            self.scene_img = ImageTk.PhotoImage(img_resized)
+            self.scene_label.config(image=self.scene_img, text='')
+            
+        except Exception as e:
+            self.scene_label.config(text=f'[ background error: {str(e)} ]', fg=MUTED, font=('Courier', 18, 'bold'))
 
     def begin_cross(self):
         self.game.started = True
@@ -461,11 +591,44 @@ class App:
         self.game.play_card(idx)
         self.refresh()
 
+    def reroll_next(self):
+        """Spend Judge Patience to reroll the next intent."""
+        if self.game.reroll_next_intent():
+            self.refresh()
+
+    def _draw_rounded_rect(self, canvas, x1, y1, x2, y2, radius=15, **kwargs):
+        """Draw a rounded rectangle on a Canvas widget."""
+        points = [
+            x1+radius, y1,
+            x1+radius, y1,
+            x2-radius, y1,
+            x2-radius, y1,
+            x2, y1,
+            x2, y1+radius,
+            x2, y1+radius,
+            x2, y2-radius,
+            x2, y2-radius,
+            x2, y2,
+            x2-radius, y2,
+            x2-radius, y2,
+            x1+radius, y2,
+            x1+radius, y2,
+            x1, y2,
+            x1, y2-radius,
+            x1, y2-radius,
+            x1, y1+radius,
+            x1, y1+radius,
+            x1, y1
+        ]
+        return canvas.create_polygon(points, **kwargs, smooth=True)
+
     def card_status(self, card):
         if card.id == 'prior_statement' and not self.game.testimony_live:
             return ('NEEDS TESTIMONY', WARN)
         if card.id == 'impeach' and not self.game.exposed:
             return ('NEEDS EXPOSED', WARN)
+        if card.id == 'impeach' and self.game.exposed and self.game.last_card_played == 'prior_statement':
+            return ('★ COMBO READY ★', GOOD)
         if card.id == 'admit_exhibit' and self.game.foundation_active:
             return ('BOOSTED', GOOD)
         if card.id == 'objection':
@@ -476,6 +639,12 @@ class App:
 
     def refresh(self):
         g = self.game
+        
+        # Age and remove floating damages
+        g.floating_damages = [d for d in g.floating_damages if d['age'] < 30]
+        for d in g.floating_damages:
+            d['age'] += 1
+        
         self.speaker.config(text=g.dialogue[0])
         self.bark.config(text=g.dialogue[1])
         self.caption.config(text=g.dialogue[2])
@@ -494,11 +663,17 @@ class App:
         if g.enemy_sympathy > 0:
             enemy_defense += f'\nSYMPATHY: {g.enemy_sympathy}'
         
+        # Show next intent if available
+        next_hint = ''
+        if g.started and hasattr(g, 'next_intent'):
+            next_hint = f'\n┌─ NEXT: {g.next_intent.name}'
+        
         self.enemy_stats.config(text=(
             f'OPPOSING COUNSEL\n{g.enemy_name}\n'
             f'CREDIBILITY: {g.enemy_cred}\n' +
             (enemy_defense if enemy_defense else '\nNO DEFENSES\n') +
-            f'\nINTENT: {g.enemy_intent.name}'
+            f'\nINTENT: {g.enemy_intent.name}' +
+            next_hint
         ))
         
         state_lines = [f'TURN: {g.turn}']
@@ -516,71 +691,112 @@ class App:
         if not g.started:
             hint += 'Hit BEGIN CROSS. Watch for TESTIMONY LIVE to start your combo.'
         elif g.testimony_live and not g.exposed:
-            hint += 'TESTIMONY active. Use PRIOR STATEMENT to EXPOSE.'
+            hint += 'TESTIMONY active.\nPRIOR STATEMENT → EXPOSED'
         elif g.exposed:
-            hint += 'Story is cracked. IMPEACH for big damage.'
+            hint += 'EXPOSED READY!\nIMPEACH for +5 dmg\nCOMBO: +3 more!'
         elif g.foundation_active:
-            hint += 'FOUNDATION ready. ADMIT EXHIBIT boosted.'
+            hint += 'FOUNDATION set.\nADMIT EXHIBIT boosted.'
         else:
-            hint += 'Build your patterns. Protect your credibility.'
+            hint += 'Build patterns.\nProtect credibility.'
         self.hint_text.config(text=hint)
 
-        # Action summary (most recent moves)
-        action_lines = []
+        # Consolidated Combat Log (recent actions + floating damage + next intent + history)
+        combat_display = ''
         if g.started and len(g.log) > 0:
-            # Show last 2-3 moves as action summary
-            action_lines = g.log[-3:]
-        
-        if action_lines:
-            self.action_text.config(text='LAST ACTIONS:\n' + '\n'.join(action_lines))
+            # Show last 10 moves as unified combat log
+            combat_display = '\n'.join(g.log[-10:])
         else:
-            self.action_text.config(text='')
-
-        # Trial record (full combat history)
-        trial_lines = []
-        if g.started:
-            trial_lines = g.log[-10:]  # Last 10 moves
+            combat_display = 'Awaiting begin...'
         
-        if trial_lines:
-            self.trial_record_text.config(text='FULL LOG:\n' + '\n'.join(trial_lines))
+        # Update unified combat log
+        self.combat_log_text.config(text=combat_display)
+        
+        # Probability display for next intent odds - Balatro style alerts
+        prob_display = 'LOADING...'
+        prob_hidden = True
+        if g.started and hasattr(g, 'get_intent_probabilities'):
+            probs = g.get_intent_probabilities()
+            prob_hidden = False
+            
+            intent_map = {
+                'direct_exam': ('Direct Exam', '📖'),
+                'polish_story': ('Polish Story', '✨'),
+                'grandstanding': ('Grandstand', '🎭'),
+                'overprepare': ('Overprepare', '📚'),
+                'cheap_shot': ('Cheap Shot', '⚡')
+            }
+            
+            # Build visual odds display
+            prob_lines = []
+            for key in ['direct_exam', 'polish_story', 'grandstanding', 'overprepare', 'cheap_shot']:
+                name, icon = intent_map[key]
+                pct = probs[key]
+                prob_lines.append(f'{icon} {name}  {pct}%')
+            
+            prob_display = '\n'.join(prob_lines)
+        
+        if prob_hidden:
+            self.prob_alert.grid_remove()
         else:
-            self.trial_record_text.config(text='Fighting has not begun.')
+            self.prob_alert.grid()
+            self.prob_text.config(text=prob_display)
+        
+        # Update reroll button state and styling
+        reroll_enabled = g.started and g.judge_patience >= 3 and g.enemy_cred > 0 and g.player_cred > 0
+        self.reroll_btn.config(state='normal' if reroll_enabled else 'disabled')
 
         for w in self.hand_frame.winfo_children():
             w.destroy()
         for i, card in enumerate(g.hand):
             status, color = self.card_status(card)
             
-            # Main card frame with playing card styling (raised border for 3D effect)
-            card_frame = tk.Frame(self.hand_frame, bg='#e8dcc8', relief='raised', borderwidth=3)
-            card_frame.grid(row=0, column=i, padx=6, pady=6, sticky='n')
+            # Create card using Canvas for rounded corners
+            card_width = 150
+            card_height = 280
+            card_canvas = tk.Canvas(self.hand_frame, width=card_width, height=card_height, bg=BG, highlightthickness=0, relief='flat', borderwidth=0)
+            card_canvas.grid(row=0, column=i, padx=5, pady=8, sticky='n')
             
-            # Inner card content frame
-            inner_frame = tk.Frame(card_frame, bg=CARD_BG)
-            inner_frame.pack(fill='both', expand=True, padx=2, pady=2)
+            # Draw rounded rectangle for card background
+            self._draw_rounded_rect(card_canvas, 1, 1, card_width-1, card_height-1, radius=15, fill='#e8dcc8', outline='#2a1f2f', width=2)
             
-            # Top-left cost indicator (like card pip)
-            top_section = tk.Frame(inner_frame, bg=CARD_BG, height=25)
-            top_section.pack(fill='x', padx=4, pady=(4, 0))
-            cost_label = tk.Label(top_section, text=str(card.cost), bg=CARD_BG, fg=ACCENT, font=('Courier', 16, 'bold'), width=3)
+            # Create a frame to hold card content
+            content_frame = tk.Frame(card_canvas, bg='#e8dcc8', relief='flat', borderwidth=0)
+            content_frame.pack(fill='both', expand=True, padx=4, pady=4)
+            
+            # Top section with cost
+            top_row = tk.Frame(content_frame, bg='#e8dcc8')
+            top_row.pack(fill='x', padx=6, pady=(6, 2))
+            cost_label = tk.Label(top_row, text=str(card.cost), bg='#e8dcc8', fg='#2a1f2f', font=('Courier', 14, 'bold'))
             cost_label.pack(side='left')
             
+            # Spacer
+            tk.Frame(content_frame, bg='#e8dcc8', height=4).pack()
+            
             # Card name
-            tk.Label(inner_frame, text=f'{card.name}', bg=CARD_BG, fg=ACCENT, font=('Courier', 10, 'bold'), wraplength=130, justify='center').pack(anchor='center', padx=4, pady=(2, 0))
+            tk.Label(content_frame, text=card.name, bg='#e8dcc8', fg='#2a1f2f', font=('Courier', 9, 'bold'), wraplength=110, justify='center').pack(padx=6, pady=(0, 2))
             
-            # Tags
-            tk.Label(inner_frame, text=' / '.join(card.tags), bg=CARD_BG, fg=INFO, font=('Courier', 8, 'bold'), wraplength=130, justify='center').pack(anchor='center', padx=2, pady=1)
+            # Card tags - smaller and muted
+            tk.Label(content_frame, text=' • '.join(card.tags), bg='#e8dcc8', fg='#8b7355', font=('Courier', 7), wraplength=110, justify='center').pack(padx=6, pady=0)
             
-            # Card text description
-            tk.Label(inner_frame, text=card.text, bg=CARD_BG, fg=TEXT, font=('Courier', 8), wraplength=130, justify='center').pack(anchor='center', padx=4, pady=3)
+            # Spacer
+            tk.Frame(content_frame, bg='#e8dcc8', height=3).pack()
             
-            # Status indicator
-            status_label = tk.Label(inner_frame, text=status, bg=CARD_BG, fg=color, font=('Courier', 8, 'bold'))
-            status_label.pack(anchor='center', pady=1)
+            # Card description - cleaner layout
+            tk.Label(content_frame, text=card.text, bg='#e8dcc8', fg='#3a2a3a', font=('Courier', 7), wraplength=110, justify='center').pack(padx=6, pady=(2, 4))
             
-            # Play button at bottom
+            # Status indicator - compact
+            if status and status != '':
+                tk.Label(content_frame, text=status, bg='#e8dcc8', fg=color, font=('Courier', 7, 'bold')).pack(pady=2)
+            
+            # Play button - full width at bottom
             state = 'normal' if g.started and card.cost <= g.focus and g.enemy_cred > 0 and g.player_cred > 0 else 'disabled'
-            tk.Button(inner_frame, text='PLAY', state=state, command=lambda idx=i: self.play(idx), bg=ACCENT, fg=BG, relief='raised', borderwidth=2, font=('Courier', 9, 'bold')).pack(fill='x', padx=4, pady=(2, 4))
+            tk.Button(content_frame, text='PLAY', state=state, command=lambda idx=i: self.play(idx), bg='#f3b563', fg='#16111f', relief='flat', font=('Courier', 8, 'bold')).pack(fill='x', padx=6, pady=(4, 6))
+
+        # Update deck counter
+        deck_count = len(g.deck)
+        discard_count = len(g.discard)
+        hand_count = len(g.hand)
+        self.deck_info.config(text=f'DECK: {deck_count} | DISCARD: {discard_count}')
 
         if g.enemy_cred <= 0:
             self.banner.config(text='COURT FEED // VICTORY — THE SHOWBOAT LOST CREDIBILITY')
