@@ -536,7 +536,7 @@ class App:
 
         # Bottom: controls
         self.bottom = tk.Frame(overlay_container, bg=BG)
-        self.bottom.place(x=0, y=-60, relwidth=1, height=60, anchor='sw')
+        self.bottom.place(x=0, rely=1.0, relwidth=1, height=60, anchor='sw')
 
         self.controls = self.panel(self.bottom)
         self.controls.pack(fill='x', side='bottom')
