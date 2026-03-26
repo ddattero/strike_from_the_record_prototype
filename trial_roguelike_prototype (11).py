@@ -840,53 +840,63 @@ class App:
             canvas.destroy()
         self.hand_cards = []
 
+        if not g.started:
+            self.deck_info.config(text='')
+            if g.enemy_cred <= 0:
+                self.banner.config(text='COURT FEED // VICTORY — THE SHOWBOAT LOST CREDIBILITY')
+            elif g.player_cred <= 0:
+                self.banner.config(text='COURT FEED // DEFEAT — YOUR CREDIBILITY COLLAPSED')
+            else:
+                self.banner.config(text='COURT FEED // ACT I')
+            return
+
         hand_count = len(g.hand)
-        card_width = 122
-        card_height = 188
-        horizontal_step = 126
+        card_width = 148
+        card_height = 252
+        horizontal_step = 152
         root_width = max(self.root.winfo_width(), 1400)
         total_span = card_width if hand_count <= 1 else card_width + horizontal_step * (hand_count - 1)
         start_x = root_width - total_span
-        row_y = 706
+        row_y = 684
 
         for i, card in enumerate(g.hand):
             status, color = self.card_status(card)
             card_x = start_x + i * horizontal_step
             card_y = row_y
             
-            card_canvas = tk.Canvas(self.main, width=card_width, height=card_height, bg='#8f4b1f', highlightthickness=0, relief='flat', borderwidth=0)
+            card_canvas = tk.Canvas(self.main, width=card_width, height=card_height, bg='#6f3816', highlightthickness=0, relief='flat', borderwidth=0)
             card_canvas.place(x=card_x, y=card_y)
             self.hand_cards.append(card_canvas)
             
             # Draw rounded rectangle for card background
-            self._draw_rounded_rect(card_canvas, 1, 1, card_width-1, card_height-1, radius=15, fill='#e8dcc8', outline='#2a1f2f', width=2)
+            self._draw_rounded_rect(card_canvas, 1, 1, card_width-1, card_height-1, radius=15, fill='#cdb89c', outline='#201610', width=2)
             
             # Create a frame to hold card content
-            content_frame = tk.Frame(card_canvas, bg='#e8dcc8', relief='flat', borderwidth=0)
+            content_frame = tk.Frame(card_canvas, bg='#cdb89c', relief='flat', borderwidth=0)
             card_canvas.create_window(card_width // 2, card_height // 2, window=content_frame, width=card_width - 10, height=card_height - 10)
             
             # Top section with cost
-            top_row = tk.Frame(content_frame, bg='#e8dcc8')
-            top_row.pack(fill='x', padx=6, pady=(5, 1))
-            cost_label = tk.Label(top_row, text=str(card.cost), bg='#e8dcc8', fg='#2a1f2f', font=('Courier', 13, 'bold'))
+            top_row = tk.Frame(content_frame, bg='#cdb89c')
+            top_row.pack(fill='x', padx=8, pady=(7, 3))
+            cost_label = tk.Label(top_row, text=str(card.cost), bg='#cdb89c', fg='#201610', font=('Courier', 15, 'bold'))
             cost_label.pack(side='left')
             
             # Card name
-            tk.Label(content_frame, text=card.name, bg='#e8dcc8', fg='#2a1f2f', font=('Courier', 8, 'bold'), wraplength=108, justify='center').pack(padx=7, pady=(0, 1))
+            tk.Label(content_frame, text=card.name, bg='#cdb89c', fg='#201610', font=('Courier', 10, 'bold'), wraplength=132, justify='center').pack(padx=9, pady=(0, 3))
             
             # Card tags - smaller and muted
-            tk.Label(content_frame, text=' • '.join(card.tags), bg='#e8dcc8', fg='#8b7355', font=('Courier', 6), wraplength=108, justify='center').pack(padx=7, pady=(0, 1))
+            tk.Label(content_frame, text=' • '.join(card.tags), bg='#cdb89c', fg='#6d5743', font=('Courier', 8), wraplength=132, justify='center').pack(padx=9, pady=(0, 3))
             
             # Card description - cleaner layout
-            tk.Label(content_frame, text=card.text, bg='#e8dcc8', fg='#3a2a3a', font=('Courier', 7), wraplength=104, justify='left').pack(padx=8, pady=(2, 3), anchor='n')
+            tk.Label(content_frame, text=card.text, bg='#cdb89c', fg='#2d221d', font=('Courier', 9), wraplength=130, justify='left').pack(padx=10, pady=(3, 6), anchor='n')
             
             # Status indicator - compact
             if status and status != '':
-                tk.Label(content_frame, text=status, bg='#e8dcc8', fg=color, font=('Courier', 6, 'bold')).pack(pady=(0, 2))
+                tk.Label(content_frame, text=status, bg='#cdb89c', fg=color, font=('Courier', 8, 'bold')).pack(pady=(0, 5))
             
             # Play button - full width at bottom
             state = 'normal' if g.started and card.cost <= g.focus and g.enemy_cred > 0 and g.player_cred > 0 else 'disabled'
-            tk.Button(content_frame, text='PLAY', state=state, command=lambda idx=i: self.play(idx), bg='#f3b563', fg='#16111f', relief='flat', font=('Courier', 8, 'bold')).pack(fill='x', padx=6, pady=(2, 5))
+            tk.Button(content_frame, text='PLAY', state=state, command=lambda idx=i: self.play(idx), bg='#f3b563', fg='#16111f', relief='flat', font=('Courier', 10, 'bold')).pack(fill='x', padx=8, pady=(4, 7))
 
         self.deck_info.config(text='')
 
