@@ -16,6 +16,10 @@ GOOD = '#6bffb0'
 INFO = '#78d7ff'
 WARN = '#ffd56b'
 CARD_BG = '#24192c'
+SCENE_WIDTH = 1536
+SCENE_HEIGHT = 1024
+CLIPBOARD_BOUNDS = (449, 633, 850, 887)
+CLIPBOARD_TEXT_BOUNDS = (520, 690, 785, 940)
 
 @dataclass
 class Card:
@@ -83,7 +87,7 @@ class Game:
         self.hand = []
         self.log = []
         self.floating_damages = []  # {damage, x, y, age}
-        self.dialogue = ('BAILIFF', 'Act I — The Story Gets Built', 'Opposing counsel wants to build a clean story. Watch for TESTIMONY, create EXPOSED, then IMPEACH.')
+        self.dialogue = ('', '', 'Opposing counsel wants to build a clean story. Watch for TESTIMONY, create EXPOSED, then IMPEACH.')
         self.enemy_name = 'THE SHOWBOAT'
         self.enemy_intent = self.roll_intent()
         self.next_intent = self.roll_intent()
@@ -377,6 +381,9 @@ class App:
         
         return inner
 
+    def scene_to_rel(self, x, y):
+        return x / SCENE_WIDTH, y / SCENE_HEIGHT
+
     def build_ui(self):
         self.root.geometry('1600x1000')
         self.root.minsize(1400, 900)
@@ -388,161 +395,248 @@ class App:
 
         self.scene_label = tk.Label(bg_frame, bg=BG)
         self.scene_label.place(x=0, y=0, relwidth=1, relheight=1)
-        # Image will be loaded after window renders via after() in __init__
 
-        # ===== UI OVERLAY LAYER =====
-        overlay_container = tk.Frame(self.root, bg=BG)
-        overlay_container.place(x=0, y=0, relwidth=1, relheight=1)
+        # ===== TOP BANNER =====
+        self.top = tk.Frame(self.root, bg='#1a1410')
+        self.top.place(relx=0.02, y=14, width=420, height=42)
 
-        # TOP: Banner
-        self.top = tk.Frame(overlay_container, bg='#1a1410', relief='flat', borderwidth=0)
-        self.top.place(x=0, y=0, relwidth=1, height=60)
+        self.banner = tk.Label(
+            self.top,
+            text='COURT FEED // ACT I — THE STORY GETS BUILT',
+            bg='#1a1410',
+            fg=ACCENT,
+            font=('Courier', 15, 'bold')
+        )
+        self.banner.place(x=12, y=7)
 
-        self.banner = tk.Label(self.top, text='COURT FEED // ACT I — THE STORY GETS BUILT', bg='#1a1410', fg=ACCENT, font=('Courier', 20, 'bold'))
-        self.banner.place(x=15, y=8)
+        # ===== MAIN FREE-PLACED OVERLAY STAGE =====
+        self.main = self.root
 
-        # MAIN: Grid-based UI on top of background
-        self.main = tk.Frame(overlay_container, bg=BG)
-        self.main.place(x=0, y=60, relwidth=1, relheight=1)
-        self.main.columnconfigure(0, weight=1)  # Left: Stats
-        self.main.columnconfigure(1, weight=2)  # Middle: Scene + Action + Cards
-        self.main.columnconfigure(2, weight=1)  # Right: Trial Record
-        self.main.rowconfigure(0, weight=1)
-        self.main.rowconfigure(1, weight=1)
+        self.guidance_text = tk.Label(
+            self.main,
+            text='Opposing counsel wants to build a clean story. Watch for TESTIMONY, create EXPOSED, then IMPEACH.',
+            bg='#1a1410',
+            fg=TEXT,
+            font=('Courier', 9, 'bold'),
+            justify='left',
+            wraplength=410,
+            padx=8,
+            pady=6
+        )
+        self.guidance_text.place(relx=0.02, rely=0.08, anchor='nw', width=430, height=46)
 
-        # ===== LEFT COLUMN: STATS =====
-        self.left_stats = tk.Frame(self.main, bg=BG)
-        self.left_stats.grid(row=0, column=0, rowspan=2, sticky='nsew', padx=(0, 6), pady=(0, 6))
-        self.left_stats.columnconfigure(0, weight=1)
+        self.top_left_status = tk.Label(
+            self.main,
+            text='',
+            bg='#1a1410',
+            fg=ACCENT,
+            font=('Courier', 9, 'bold'),
+            justify='left',
+            padx=8,
+            pady=4
+        )
+        self.top_left_status.place(relx=0.02, rely=0.135, anchor='nw', width=220, height=42)
 
-        # Player stats
-        self.player_panel = self.create_rounded_panel(self.left_stats, fill='x', pady=(0, 6))
-        self.player_stats = tk.Label(self.player_panel, bg=PANEL, fg=TEXT, justify='left', font=('Courier', 12, 'bold'))
-        self.player_stats.pack(anchor='w', padx=10, pady=10)
+        # =========================================================
+        # PAPER STATS PANEL (placed over notebook area on desk)
+        # =========================================================
+        text_x0, text_y0, text_x1, text_y1 = CLIPBOARD_TEXT_BOUNDS
+        text_relx, text_rely = self.scene_to_rel(text_x0, text_y0)
 
-        # Enemy stats
-        self.enemy_panel = self.create_rounded_panel(self.left_stats, fill='x', pady=(0, 6))
-        self.enemy_stats = tk.Label(self.enemy_panel, bg=PANEL, fg=TEXT, justify='left', font=('Courier', 11, 'bold'))
-        self.enemy_stats.pack(anchor='w', padx=10, pady=10)
+        self.paper_stats = tk.Canvas(
+            self.main,
+            bg='#efe2c2',
+            highlightthickness=0,
+            bd=0,
+            relief='flat'
+        )
+        self.paper_stats.place(
+            relx=text_relx,
+            rely=text_rely,
+            anchor='nw',
+            width=(text_x1 - text_x0),
+            height=(text_y1 - text_y0)
+        )
 
-        # Combat state
-        self.state_panel = self.create_rounded_panel(self.left_stats, fill='x', pady=(0, 6))
-        self.state_stats = tk.Label(self.state_panel, bg=PANEL, fg=TEXT, justify='left', font=('Courier', 11, 'bold'))
-        self.state_stats.pack(anchor='w', padx=10, pady=10)
+        # =========================================================
+        # DIALOGUE BOX (floating above desk, centered)
+        # =========================================================
+        self.transcript = tk.Frame(self.main, bg='#241a22', highlightbackground=ACCENT, highlightthickness=2)
+        self.transcript.place_forget()
 
-        # Hint/guidance
-        self.hint_panel = self.create_rounded_panel(self.left_stats, fill='both', expand=True)
-        self.hint_text = tk.Label(self.hint_panel, bg=PANEL, fg=MUTED, justify='left', font=('Courier', 10), wraplength=180)
-        self.hint_text.pack(anchor='nw', padx=10, pady=10)
-
-        # ===== MIDDLE COLUMN: SCENE + ACTION + CARDS =====
-        self.middle = tk.Frame(self.main, bg=BG)
-        self.middle.grid(row=0, column=1, sticky='nsew', padx=(0, 6), pady=(0, 6))
-        self.middle.columnconfigure(0, weight=1)
-        self.middle.rowconfigure(0, weight=2)  # Scene expands more
-        self.middle.rowconfigure(1, weight=0)  # Odds alert fixed
-        self.middle.rowconfigure(2, weight=1)  # Hand expands to take space
-
-        # Scene image panel (now just shows the background)
-        self.scene_panel = tk.Frame(self.middle, bg=BG)
-        self.scene_panel.grid(row=0, column=0, sticky='nsew', padx=0, pady=0)
-        self.scene_panel.rowconfigure(0, weight=1)
-        self.scene_panel.columnconfigure(0, weight=1)
-
-        # Transcript with rounded effect
-        transcript_outer = tk.Frame(self.scene_panel, bg=ACCENT, relief='flat', borderwidth=0)
-        transcript_outer.grid(row=1, column=0, sticky='ew', padx=6, pady=(0, 6))
-        self.transcript = tk.Frame(transcript_outer, bg=PANEL)
-        self.transcript.pack(fill='both', padx=2, pady=2)
-        self.speaker = tk.Label(self.transcript, text='', bg=PANEL, fg=ACCENT, font=('Courier', 13, 'bold'))
+        self.speaker = tk.Label(
+            self.transcript,
+            text='',
+            bg=PANEL,
+            fg=ACCENT,
+            font=('Courier', 10, 'bold')
+        )
         self.speaker.pack(anchor='w', padx=10, pady=(8, 0))
-        self.bark = tk.Label(self.transcript, text='', bg=PANEL, fg=TEXT, font=('Courier', 15, 'bold'), wraplength=550, justify='left')
+
+        self.bark = tk.Label(
+            self.transcript,
+            text='',
+            bg=PANEL,
+            fg=TEXT,
+            font=('Courier', 11, 'bold'),
+            wraplength=480,
+            justify='left'
+        )
         self.bark.pack(anchor='w', padx=10, pady=4)
-        self.caption = tk.Label(self.transcript, text='', bg=PANEL, fg=MUTED, font=('Courier', 10), wraplength=550, justify='left')
+
+        self.caption = tk.Label(
+            self.transcript,
+            text='',
+            bg=PANEL,
+            fg=MUTED,
+            font=('Courier', 9),
+            wraplength=480,
+            justify='left'
+        )
         self.caption.pack(anchor='w', padx=10, pady=(0, 8))
 
-        # Probability display with rounded effect
-        prob_outer = tk.Frame(self.middle, bg=ACCENT, relief='flat', borderwidth=0)
-        prob_outer.grid(row=1, column=0, sticky='ew', padx=0, pady=(6, 6))
-        self.prob_alert = tk.Frame(prob_outer, bg=PANEL)
-        self.prob_alert.pack(fill='both', padx=2, pady=2)
-        
-        prob_title = tk.Label(self.prob_alert, text='⚡ NEXT TURN ODDS ⚡', bg=PANEL, fg=ACCENT, font=('Courier', 12, 'bold'))
-        prob_title.pack(anchor='center', pady=(8, 2))
-        
-        self.prob_text = tk.Label(self.prob_alert, text='', bg=PANEL, fg=GOOD, font=('Courier', 10, 'bold'), justify='center')
-        self.prob_text.pack(anchor='center', padx=10, pady=(2, 4))
-        
-        self.reroll_hint = tk.Label(self.prob_alert, text='(Spend 3 Judge Patience to reroll)', bg=PANEL, fg=MUTED, font=('Courier', 9, 'italic'))
-        self.reroll_hint.pack(anchor='center', pady=(0, 8))
+        # =========================================================
+        # NEXT TURN ODDS / ALERT BOX
+        # =========================================================
+        self.prob_text = tk.Label(
+            self.main,
+            text='',
+            bg='#241a22',
+            fg=GOOD,
+            font=('Courier', 8, 'bold'),
+            justify='left',
+            anchor='nw',
+            padx=8,
+            pady=6,
+            highlightbackground=ACCENT,
+            highlightthickness=2
+        )
+        self.prob_text.place(relx=0.02, rely=0.98, anchor='sw', width=195, height=110)
 
-        # Hand (now expands to fill space)
-        self.hand_section = tk.Frame(self.middle, bg=BG)
-        self.hand_section.grid(row=2, column=0, sticky='nsew', padx=0, pady=(6, 0))
-        self.hand_section.columnconfigure(0, weight=1)
-        self.hand_section.rowconfigure(2, weight=1)  # Expand card frame
+        # =========================================================
+        # ENCOUNTER START / ONBOARDING BOX
+        # =========================================================
+        overlay_outer = tk.Frame(self.main, bg=ACCENT, relief='flat', borderwidth=0)
+        overlay_outer.place(relx=0.92, rely=0.12, anchor='ne', width=250, height=132)
 
-        # Hand title with deck info
-        title_frame = tk.Frame(self.hand_section, bg=BG)
-        title_frame.grid(row=0, column=0, sticky='ew', padx=0, pady=(0, 3))
-        title_frame.columnconfigure(0, weight=1)
-        
-        self.hand_title = tk.Label(title_frame, text='YOUR HAND // BUILD PATTERNS, BREAK CREDIBILITY', bg=BG, fg=ACCENT, font=('Courier', 14, 'bold'))
-        self.hand_title.pack(anchor='w', padx=0, side='left')
-        
-        self.deck_info = tk.Label(title_frame, text='', bg=BG, fg=MUTED, font=('Courier', 11, 'bold'))
-        self.deck_info.pack(anchor='e', padx=0, side='right')
-        
-        self.hand_frame = tk.Frame(self.hand_section, bg=BG)
-        self.hand_frame.grid(row=2, column=0, sticky='nsew', padx=0)
-
-        # ===== RIGHT COLUMN: TRIAL RECORD =====
-        self.right = tk.Frame(self.main, bg=BG)
-        self.right.grid(row=0, column=2, rowspan=2, sticky='nsew')
-        self.right.columnconfigure(0, weight=1)
-        self.right.rowconfigure(0, weight=0)  # Overlay
-        self.right.rowconfigure(1, weight=1)  # Combat log expands
-        self.right.rowconfigure(2, weight=0)  # Reroll button
-
-        # Overlay with rounded effect
-        overlay_outer = tk.Frame(self.right, bg=ACCENT, relief='flat', borderwidth=0)
-        overlay_outer.grid(row=0, column=0, sticky='ew', pady=(0, 6))
         self.overlay = tk.Frame(overlay_outer, bg=PANEL)
-        self.overlay.pack(fill='both', padx=2, pady=2)
-        tk.Label(self.overlay, text='ENCOUNTER START // THE SHOWBOAT', bg=PANEL, fg=ACCENT, font=('Courier', 14, 'bold')).pack(anchor='w', padx=10, pady=(10, 4))
-        tk.Label(self.overlay, text='FIRST PATTERN: Wait for TESTIMONY LIVE → PRIOR STATEMENT → IMPEACH.', bg=PANEL, fg=INFO, font=('Courier', 9, 'bold'), wraplength=280, justify='left').pack(anchor='w', padx=10, pady=(0, 6))
-        self.start_btn = tk.Button(self.overlay, text='BEGIN CROSS', command=self.begin_cross, bg=ACCENT, fg=BG, font=('Courier', 12, 'bold'), relief='flat')
+        self.overlay.pack(fill='both', expand=True, padx=2, pady=2)
+
+        tk.Label(
+            self.overlay,
+            text='THE SHOWBOAT',
+            bg=PANEL,
+            fg=ACCENT,
+            font=('Courier', 12, 'bold'),
+            wraplength=250,
+            justify='left'
+        ).pack(anchor='w', padx=10, pady=(10, 4))
+
+        tk.Label(
+            self.overlay,
+            text='Wait for TESTIMONY.\nThen PRIOR STATEMENT → IMPEACH.',
+            bg=PANEL,
+            fg=INFO,
+            font=('Courier', 9, 'bold'),
+            wraplength=250,
+            justify='left'
+        ).pack(anchor='w', padx=10, pady=(0, 6))
+
+        self.start_btn = tk.Button(
+            self.overlay,
+            text='BEGIN CROSS',
+            command=self.begin_cross,
+            bg=ACCENT,
+            fg=BG,
+            font=('Courier', 12, 'bold'),
+            relief='flat'
+        )
         self.start_btn.pack(anchor='w', padx=10, pady=(0, 10), fill='x')
 
-        # Combat log in right column
-        self.combat_log_section = tk.Frame(self.right, bg=BG)
-        self.combat_log_section.grid(row=1, column=0, sticky='nsew', padx=0, pady=(6, 6))
-        
-        log_title = tk.Label(self.combat_log_section, text='COMBAT LOG // RECENT MOVES', bg=BG, fg=ACCENT, font=('Courier', 10, 'bold'))
-        log_title.pack(anchor='w', padx=0, pady=(0, 4))
-        
-        # Combat log box with rounded effect
-        log_outer = tk.Frame(self.combat_log_section, bg=ACCENT, relief='flat', borderwidth=0)
-        log_outer.pack(fill='both', expand=True)
-        log_box = tk.Frame(log_outer, bg=PANEL)
-        log_box.pack(fill='both', expand=True, padx=2, pady=2)
-        
-        self.combat_log_text = tk.Label(log_box, text='', bg=PANEL, fg=TEXT, font=('Courier', 9), justify='left', anchor='nw')
-        self.combat_log_text.pack(fill='both', expand=True, padx=8, pady=8)
+        # =========================================================
+        # COMBAT LOG (compact, right side)
+        # =========================================================
+        self.combat_log_text = tk.Label(
+            self.main,
+            text='',
+            bg='#20161d',
+            fg=TEXT,
+            font=('Courier', 7),
+            justify='left',
+            anchor='nw',
+            padx=8,
+            pady=8,
+            highlightbackground=ACCENT,
+            highlightthickness=2
+        )
+        self.combat_log_text.place(relx=0.78, rely=0.50, anchor='nw', width=210, height=118)
 
-        # Reroll button at bottom of right panel
-        self.reroll_btn = tk.Button(self.right, text='⚡ REROLL NEXT TURN (Cost: 3 Patience) ⚡', command=self.reroll_next, bg=WARN, fg='#000000', font=('Courier', 10, 'bold'), relief='flat', borderwidth=0)
-        self.reroll_btn.grid(row=2, column=0, sticky='ew', padx=0, pady=(6, 0))
+        # =========================================================
+        # HAND / CARDS ON TABLE
+        # =========================================================
+        self.hand_title = tk.Label(
+            self.main,
+            text='YOUR HAND',
+            bg='#1a1410',
+            fg='#f6d7a7',
+            font=('Courier', 11, 'bold')
+        )
+        self.hand_title.place(relx=0.73, rely=0.69, anchor='w')
 
-        # Bottom: controls
-        self.bottom = tk.Frame(overlay_container, bg=BG)
-        self.bottom.place(x=0, rely=1.0, relwidth=1, height=60, anchor='sw')
+        self.deck_info = tk.Label(
+            self.main,
+            text=' ',
+            bg='#1a1410',
+            fg=MUTED,
+            font=('Courier', 9, 'bold')
+        )
+        self.deck_info.place(relx=0.83, rely=0.69, anchor='w')
 
-        self.controls = self.panel(self.bottom)
-        self.controls.pack(fill='x', side='bottom')
-        tk.Button(self.controls, text='END TURN', command=self.end_turn, bg=ACCENT, fg=BG, font=('Courier', 14, 'bold'), relief='flat').pack(side='left', padx=10, pady=10)
-        tk.Button(self.controls, text='RESTART', command=self.restart, bg=PANEL2, fg=TEXT, font=('Courier', 14, 'bold'), relief='flat').pack(side='left', padx=10, pady=10)
+        self.hand_cards = []
 
+        # =========================================================
+        # BOTTOM CONTROLS
+        # =========================================================
+        self.bottom = tk.Frame(self.root, bg='#1a1410')
+        self.bottom.place(relx=0.86, rely=0.97, anchor='se', width=310, height=54)
+
+        self.controls = tk.Frame(self.bottom, bg='#1a1410')
+        self.controls.pack(fill='both', expand=True, padx=8, pady=8)
+
+        self.reroll_btn = tk.Button(
+            self.controls,
+            text='REROLL NEXT TURN',
+            command=self.reroll_next,
+            bg=WARN,
+            fg='#000000',
+            font=('Courier', 10, 'bold'),
+            relief='flat',
+            borderwidth=0,
+            width=16
+        )
+        self.reroll_btn.pack(side='left', padx=6)
+
+        tk.Button(
+            self.controls,
+            text='END TURN',
+            command=self.end_turn,
+            bg=ACCENT,
+            fg=BG,
+            font=('Courier', 14, 'bold'),
+            relief='flat',
+            width=12
+        ).pack(side='left', padx=6)
+
+        tk.Button(
+            self.controls,
+            text='RESTART',
+            command=self.restart,
+            bg=PANEL2,
+            fg=TEXT,
+            font=('Courier', 14, 'bold'),
+            relief='flat',
+            width=12
+        ).pack(side='left', padx=6)
 
 
     def load_scene(self):
@@ -568,6 +662,7 @@ class App:
             # Store reference and display
             self.scene_img = ImageTk.PhotoImage(img_resized)
             self.scene_label.config(image=self.scene_img, text='')
+            self.scene_label.lower()
             
         except Exception as e:
             self.scene_label.config(text=f'[ background error: {str(e)} ]', fg=MUTED, font=('Courier', 18, 'bold'))
@@ -648,68 +743,63 @@ class App:
         self.speaker.config(text=g.dialogue[0])
         self.bark.config(text=g.dialogue[1])
         self.caption.config(text=g.dialogue[2])
+        self.guidance_text.config(text=g.dialogue[2])
+        self.top_left_status.config(
+            text=(
+                f'Opp. Health: {g.enemy_cred}\n'
+                f'Testimony: {"ON" if g.testimony_live else "OFF"}'
+            )
+        )
+        self.transcript.place_forget()
 
-        self.player_stats.config(text=(
-            'YOUR CASE\n'
-            f'CREDIBILITY: {g.player_cred}\n'
-            f'SHIELD: {g.player_shield}\n'
-            f'FOCUS: {g.focus}/{g.max_focus}'
-        ))
-        
-        # Highlight enemy defenses if active
-        enemy_defense = ''
-        if g.enemy_shield > 0:
-            enemy_defense += f'\nSHIELD: {g.enemy_shield}'
-        if g.enemy_sympathy > 0:
-            enemy_defense += f'\nSYMPATHY: {g.enemy_sympathy}'
-        
-        # Show next intent if available
-        next_hint = ''
-        if g.started and hasattr(g, 'next_intent'):
-            next_hint = f'\n┌─ NEXT: {g.next_intent.name}'
-        
-        self.enemy_stats.config(text=(
-            f'OPPOSING COUNSEL\n{g.enemy_name}\n'
-            f'CREDIBILITY: {g.enemy_cred}\n' +
-            (enemy_defense if enemy_defense else '\nNO DEFENSES\n') +
-            f'\nINTENT: {g.enemy_intent.name}' +
-            next_hint
-        ))
-        
-        state_lines = [f'TURN: {g.turn}']
-        test_marker = f'TESTIMONY: {"✓ LIVE" if g.testimony_live else "OFF"}'
-        state_lines.append(test_marker)
-        
-        exposed_marker = f'EXPOSED: {"✓ YES" if g.exposed else "NO"}'
-        state_lines.append(exposed_marker)
-        state_lines.append(f'RECORD: {g.record}')
-        state_lines.append(f'JUDGE PATIENCE: {g.judge_patience}')
-        
-        self.state_stats.config(text='\n'.join(state_lines))
-        
-        hint = 'WHAT MATTERS NOW\n'
-        if not g.started:
-            hint += 'Hit BEGIN CROSS. Watch for TESTIMONY LIVE to start your combo.'
-        elif g.testimony_live and not g.exposed:
-            hint += 'TESTIMONY active.\nPRIOR STATEMENT → EXPOSED'
-        elif g.exposed:
-            hint += 'EXPOSED READY!\nIMPEACH for +5 dmg\nCOMBO: +3 more!'
-        elif g.foundation_active:
-            hint += 'FOUNDATION set.\nADMIT EXHIBIT boosted.'
-        else:
-            hint += 'Build patterns.\nProtect credibility.'
-        self.hint_text.config(text=hint)
+        deck_count = len(g.deck)
+        discard_count = len(g.discard)
+
+        clipboard_lines = [
+            'CASE NOTES',
+            '',
+            f'Turn: {g.turn}',
+            f'Credibility: {g.player_cred}',
+            f'Shield: {g.player_shield}',
+            f'Focus: {g.focus}/{g.max_focus}',
+            f'Record: {g.record}',
+            f'Judge Patience: {g.judge_patience}',
+            f'Deck: {deck_count}',
+            f'Discard: {discard_count}',
+            '',
+            'OPPOSITION',
+            f'Sympathy: {g.enemy_sympathy}',
+            f'Exposed: {"YES" if g.exposed else "NO"}',
+        ]
+        self.paper_stats.delete('all')
+        paper_width = int(self.paper_stats.winfo_width() or 265)
+        y = 18
+        for index, line in enumerate(clipboard_lines):
+            is_header = line in ('CASE NOTES', 'OPPOSITION')
+            font = ('Courier', 11, 'bold') if is_header else ('Courier', 10, 'bold')
+            fill = '#5d4226' if is_header else '#4a3320'
+            self.paper_stats.create_text(
+                28,
+                y,
+                text=line,
+                anchor='nw',
+                font=font,
+                fill=fill,
+                angle=7,
+                width=paper_width - 40
+            )
+            y += 28 if is_header else 22
 
         # Consolidated Combat Log (recent actions + floating damage + next intent + history)
         combat_display = ''
         if g.started and len(g.log) > 0:
-            # Show last 10 moves as unified combat log
             combat_display = '\n'.join(g.log[-10:])
-        else:
-            combat_display = 'Awaiting begin...'
         
-        # Update unified combat log
         self.combat_log_text.config(text=combat_display)
+        if combat_display:
+            self.combat_log_text.place(relx=0.78, rely=0.50, anchor='nw', width=210, height=118)
+        else:
+            self.combat_log_text.place_forget()
         
         # Probability display for next intent odds - Balatro style alerts
         prob_display = 'LOADING...'
@@ -736,74 +826,76 @@ class App:
             prob_display = '\n'.join(prob_lines)
         
         if prob_hidden:
-            self.prob_alert.grid_remove()
+            self.prob_text.config(text='')
+            self.prob_text.place_forget()
         else:
-            self.prob_alert.grid()
             self.prob_text.config(text=prob_display)
+            self.prob_text.place(relx=0.02, rely=0.98, anchor='sw', width=195, height=110)
         
         # Update reroll button state and styling
         reroll_enabled = g.started and g.judge_patience >= 3 and g.enemy_cred > 0 and g.player_cred > 0
         self.reroll_btn.config(state='normal' if reroll_enabled else 'disabled')
 
-        for w in self.hand_frame.winfo_children():
-            w.destroy()
+        for canvas in getattr(self, 'hand_cards', []):
+            canvas.destroy()
+        self.hand_cards = []
+
+        hand_count = len(g.hand)
+        card_width = 122
+        card_height = 188
+        horizontal_step = 126
+        root_width = max(self.root.winfo_width(), 1400)
+        total_span = card_width if hand_count <= 1 else card_width + horizontal_step * (hand_count - 1)
+        start_x = root_width - total_span
+        row_y = 706
+
         for i, card in enumerate(g.hand):
             status, color = self.card_status(card)
+            card_x = start_x + i * horizontal_step
+            card_y = row_y
             
-            # Create card using Canvas for rounded corners
-            card_width = 150
-            card_height = 280
-            card_canvas = tk.Canvas(self.hand_frame, width=card_width, height=card_height, bg=BG, highlightthickness=0, relief='flat', borderwidth=0)
-            card_canvas.grid(row=0, column=i, padx=5, pady=8, sticky='n')
+            card_canvas = tk.Canvas(self.main, width=card_width, height=card_height, bg='#8f4b1f', highlightthickness=0, relief='flat', borderwidth=0)
+            card_canvas.place(x=card_x, y=card_y)
+            self.hand_cards.append(card_canvas)
             
             # Draw rounded rectangle for card background
             self._draw_rounded_rect(card_canvas, 1, 1, card_width-1, card_height-1, radius=15, fill='#e8dcc8', outline='#2a1f2f', width=2)
             
             # Create a frame to hold card content
             content_frame = tk.Frame(card_canvas, bg='#e8dcc8', relief='flat', borderwidth=0)
-            content_frame.pack(fill='both', expand=True, padx=4, pady=4)
+            card_canvas.create_window(card_width // 2, card_height // 2, window=content_frame, width=card_width - 10, height=card_height - 10)
             
             # Top section with cost
             top_row = tk.Frame(content_frame, bg='#e8dcc8')
-            top_row.pack(fill='x', padx=6, pady=(6, 2))
-            cost_label = tk.Label(top_row, text=str(card.cost), bg='#e8dcc8', fg='#2a1f2f', font=('Courier', 14, 'bold'))
+            top_row.pack(fill='x', padx=6, pady=(5, 1))
+            cost_label = tk.Label(top_row, text=str(card.cost), bg='#e8dcc8', fg='#2a1f2f', font=('Courier', 13, 'bold'))
             cost_label.pack(side='left')
             
-            # Spacer
-            tk.Frame(content_frame, bg='#e8dcc8', height=4).pack()
-            
             # Card name
-            tk.Label(content_frame, text=card.name, bg='#e8dcc8', fg='#2a1f2f', font=('Courier', 9, 'bold'), wraplength=110, justify='center').pack(padx=6, pady=(0, 2))
+            tk.Label(content_frame, text=card.name, bg='#e8dcc8', fg='#2a1f2f', font=('Courier', 8, 'bold'), wraplength=108, justify='center').pack(padx=7, pady=(0, 1))
             
             # Card tags - smaller and muted
-            tk.Label(content_frame, text=' • '.join(card.tags), bg='#e8dcc8', fg='#8b7355', font=('Courier', 7), wraplength=110, justify='center').pack(padx=6, pady=0)
-            
-            # Spacer
-            tk.Frame(content_frame, bg='#e8dcc8', height=3).pack()
+            tk.Label(content_frame, text=' • '.join(card.tags), bg='#e8dcc8', fg='#8b7355', font=('Courier', 6), wraplength=108, justify='center').pack(padx=7, pady=(0, 1))
             
             # Card description - cleaner layout
-            tk.Label(content_frame, text=card.text, bg='#e8dcc8', fg='#3a2a3a', font=('Courier', 7), wraplength=110, justify='center').pack(padx=6, pady=(2, 4))
+            tk.Label(content_frame, text=card.text, bg='#e8dcc8', fg='#3a2a3a', font=('Courier', 7), wraplength=104, justify='left').pack(padx=8, pady=(2, 3), anchor='n')
             
             # Status indicator - compact
             if status and status != '':
-                tk.Label(content_frame, text=status, bg='#e8dcc8', fg=color, font=('Courier', 7, 'bold')).pack(pady=2)
+                tk.Label(content_frame, text=status, bg='#e8dcc8', fg=color, font=('Courier', 6, 'bold')).pack(pady=(0, 2))
             
             # Play button - full width at bottom
             state = 'normal' if g.started and card.cost <= g.focus and g.enemy_cred > 0 and g.player_cred > 0 else 'disabled'
-            tk.Button(content_frame, text='PLAY', state=state, command=lambda idx=i: self.play(idx), bg='#f3b563', fg='#16111f', relief='flat', font=('Courier', 8, 'bold')).pack(fill='x', padx=6, pady=(4, 6))
+            tk.Button(content_frame, text='PLAY', state=state, command=lambda idx=i: self.play(idx), bg='#f3b563', fg='#16111f', relief='flat', font=('Courier', 8, 'bold')).pack(fill='x', padx=6, pady=(2, 5))
 
-        # Update deck counter
-        deck_count = len(g.deck)
-        discard_count = len(g.discard)
-        hand_count = len(g.hand)
-        self.deck_info.config(text=f'DECK: {deck_count} | DISCARD: {discard_count}')
+        self.deck_info.config(text='')
 
         if g.enemy_cred <= 0:
             self.banner.config(text='COURT FEED // VICTORY — THE SHOWBOAT LOST CREDIBILITY')
         elif g.player_cred <= 0:
             self.banner.config(text='COURT FEED // DEFEAT — YOUR CREDIBILITY COLLAPSED')
         else:
-            self.banner.config(text='COURT FEED // ACT I — THE STORY GETS BUILT')
+            self.banner.config(text='COURT FEED // ACT I')
 
 if __name__ == '__main__':
     root = tk.Tk()
