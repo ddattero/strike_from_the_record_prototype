@@ -22,7 +22,7 @@ CLIPBOARD_BOUNDS = (449, 633, 850, 887)
 CLIPBOARD_TEXT_BOUNDS = (520, 690, 785, 940)
 
 # font parameters
-FONT_SCALE = 1.5
+FONT_SCALE = 1.3
 TITLE_FONT = ('Courier', int(18 * FONT_SCALE), 'bold')
 HEADING_FONT = ('Courier', int(14 * FONT_SCALE), 'bold')
 BODY_FONT = ('Courier', int(10 * FONT_SCALE))
@@ -475,7 +475,7 @@ class App:
             text='',
             bg=PANEL,
             fg=ACCENT,
-            font=('Courier', 10, 'bold')
+            font=BODY_FONT
         )
         self.speaker.pack(anchor='w', padx=10, pady=(8, 0))
 
@@ -484,9 +484,8 @@ class App:
             text='',
             bg=PANEL,
             fg=TEXT,
-            font=('Courier', 11, 'bold'),
+            font=BODY_FONT,
             wraplength=480,
-            justify='left'
         )
         self.bark.pack(anchor='w', padx=10, pady=4)
 
@@ -495,7 +494,7 @@ class App:
             text='',
             bg=PANEL,
             fg=MUTED,
-            font=('Courier', 9),
+            font=BODY_FONT,
             wraplength=480,
             justify='left'
         )
@@ -509,7 +508,7 @@ class App:
             text='',
             bg='#241a22',
             fg=GOOD,
-            font=('Courier', 8, 'bold'),
+            font=BODY_FONT,
             justify='left',
             anchor='nw',
             padx=8,
@@ -533,7 +532,7 @@ class App:
             text='THE SHOWBOAT',
             bg=PANEL,
             fg=ACCENT,
-            font=('Courier', 12, 'bold'),
+            font=HEADING_FONT,
             wraplength=250,
             justify='left'
         ).pack(anchor='w', padx=10, pady=(10, 4))
@@ -585,7 +584,7 @@ class App:
             text='YOUR HAND',
             bg='#1a1410',
             fg='#f6d7a7',
-            font=('Courier', 11, 'bold')
+            font=BODY_FONT
         )
         self.hand_title.place(relx=0.73, rely=0.69, anchor='w')
 
