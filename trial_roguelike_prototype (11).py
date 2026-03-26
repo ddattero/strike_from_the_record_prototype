@@ -21,6 +21,12 @@ SCENE_HEIGHT = 1024
 CLIPBOARD_BOUNDS = (449, 633, 850, 887)
 CLIPBOARD_TEXT_BOUNDS = (520, 690, 785, 940)
 
+# font parameters
+FONT_SCALE = 1.5
+TITLE_FONT = ('Courier', int(18 * FONT_SCALE), 'bold')
+HEADING_FONT = ('Courier', int(14 * FONT_SCALE), 'bold')
+BODY_FONT = ('Courier', int(10 * FONT_SCALE))
+
 @dataclass
 class Card:
     id: str
@@ -405,7 +411,7 @@ class App:
             text='COURT FEED // ACT I — THE STORY GETS BUILT',
             bg='#1a1410',
             fg=ACCENT,
-            font=('Courier', 15, 'bold')
+            font=TITLE_FONT
         )
         self.banner.place(x=12, y=7)
 
@@ -417,7 +423,7 @@ class App:
             text='Opposing counsel wants to build a clean story. Watch for TESTIMONY, create EXPOSED, then IMPEACH.',
             bg='#1a1410',
             fg=TEXT,
-            font=('Courier', 9, 'bold'),
+            font=BODY_FONT,
             justify='left',
             wraplength=410,
             padx=8,
@@ -430,7 +436,7 @@ class App:
             text='',
             bg='#1a1410',
             fg=ACCENT,
-            font=('Courier', 9, 'bold'),
+            font=BODY_FONT,
             justify='left',
             padx=8,
             pady=4
@@ -537,7 +543,7 @@ class App:
             text='Wait for TESTIMONY.\nThen PRIOR STATEMENT → IMPEACH.',
             bg=PANEL,
             fg=INFO,
-            font=('Courier', 9, 'bold'),
+            font=BODY_FONT,
             wraplength=250,
             justify='left'
         ).pack(anchor='w', padx=10, pady=(0, 6))
@@ -548,7 +554,7 @@ class App:
             command=self.begin_cross,
             bg=ACCENT,
             fg=BG,
-            font=('Courier', 12, 'bold'),
+            font=HEADING_FONT,
             relief='flat'
         )
         self.start_btn.pack(anchor='w', padx=10, pady=(0, 10), fill='x')
@@ -561,7 +567,7 @@ class App:
             text='',
             bg='#20161d',
             fg=TEXT,
-            font=('Courier', 7),
+            font=BODY_FONT,
             justify='left',
             anchor='nw',
             padx=8,
@@ -588,7 +594,7 @@ class App:
             text=' ',
             bg='#1a1410',
             fg=MUTED,
-            font=('Courier', 9, 'bold')
+            font=BODY_FONT
         )
         self.deck_info.place(relx=0.83, rely=0.69, anchor='w')
 
@@ -609,7 +615,7 @@ class App:
             command=self.reroll_next,
             bg=WARN,
             fg='#000000',
-            font=('Courier', 10, 'bold'),
+            font=BODY_FONT,
             relief='flat',
             borderwidth=0,
             width=16
@@ -622,7 +628,7 @@ class App:
             command=self.end_turn,
             bg=ACCENT,
             fg=BG,
-            font=('Courier', 14, 'bold'),
+            font=HEADING_FONT,
             relief='flat',
             width=12
         ).pack(side='left', padx=6)
@@ -633,7 +639,7 @@ class App:
             command=self.restart,
             bg=PANEL2,
             fg=TEXT,
-            font=('Courier', 14, 'bold'),
+            font=HEADING_FONT,
             relief='flat',
             width=12
         ).pack(side='left', padx=6)
@@ -643,7 +649,7 @@ class App:
         """Load and scale the courtroom image to fullscreen background."""
         img_path = os.path.join(os.path.dirname(__file__), 'courtroom_scene.png')
         if not os.path.exists(img_path):
-            self.scene_label.config(text='[ courtroom_scene.png not found ]', fg=MUTED, font=('Courier', 18, 'bold'))
+            self.scene_label.config(text='[ courtroom_scene.png not found ]', fg=MUTED, font=TITLE_FONT )
             return
             
         try:
@@ -665,7 +671,7 @@ class App:
             self.scene_label.lower()
             
         except Exception as e:
-            self.scene_label.config(text=f'[ background error: {str(e)} ]', fg=MUTED, font=('Courier', 18, 'bold'))
+            self.scene_label.config(text=f'[ background error: {str(e)} ]', fg=MUTED, font=TITLE_FONT )
 
     def begin_cross(self):
         self.game.started = True
@@ -776,7 +782,7 @@ class App:
         y = 18
         for index, line in enumerate(clipboard_lines):
             is_header = line in ('CASE NOTES', 'OPPOSITION')
-            font = ('Courier', 11, 'bold') if is_header else ('Courier', 10, 'bold')
+            font = HEADING_FONT if is_header else BODY_FONT
             fill = '#5d4226' if is_header else '#4a3320'
             self.paper_stats.create_text(
                 28,
@@ -878,25 +884,25 @@ class App:
             # Top section with cost
             top_row = tk.Frame(content_frame, bg='#cdb89c')
             top_row.pack(fill='x', padx=8, pady=(7, 3))
-            cost_label = tk.Label(top_row, text=str(card.cost), bg='#cdb89c', fg='#201610', font=('Courier', 15, 'bold'))
+            cost_label = tk.Label(top_row, text=str(card.cost), bg='#cdb89c', fg='#201610', font=HEADING_FONT)
             cost_label.pack(side='left')
             
             # Card name
-            tk.Label(content_frame, text=card.name, bg='#cdb89c', fg='#201610', font=('Courier', 10, 'bold'), wraplength=132, justify='center').pack(padx=9, pady=(0, 3))
+            tk.Label(content_frame, text=card.name, bg='#cdb89c', fg='#201610', font=BODY_FONT, wraplength=132, justify='center').pack(padx=9, pady=(0, 3))
             
             # Card tags - smaller and muted
-            tk.Label(content_frame, text=' • '.join(card.tags), bg='#cdb89c', fg='#6d5743', font=('Courier', 8), wraplength=132, justify='center').pack(padx=9, pady=(0, 3))
+            tk.Label(content_frame, text=' • '.join(card.tags), bg='#cdb89c', fg='#6d5743', font=BODY_FONT, wraplength=132, justify='center').pack(padx=9, pady=(0, 3))
             
             # Card description - cleaner layout
-            tk.Label(content_frame, text=card.text, bg='#cdb89c', fg='#2d221d', font=('Courier', 9), wraplength=130, justify='left').pack(padx=10, pady=(3, 6), anchor='n')
+            tk.Label(content_frame, text=card.text, bg='#cdb89c', fg='#2d221d', font=BODY_FONT, wraplength=130, justify='left').pack(padx=10, pady=(3, 6), anchor='n')
             
             # Status indicator - compact
             if status and status != '':
-                tk.Label(content_frame, text=status, bg='#cdb89c', fg=color, font=('Courier', 8, 'bold')).pack(pady=(0, 5))
+                tk.Label(content_frame, text=status, bg='#cdb89c', fg=color, font=BODY_FONT).pack(pady=(0, 5))
             
             # Play button - full width at bottom
             state = 'normal' if g.started and card.cost <= g.focus and g.enemy_cred > 0 and g.player_cred > 0 else 'disabled'
-            tk.Button(content_frame, text='PLAY', state=state, command=lambda idx=i: self.play(idx), bg='#f3b563', fg='#16111f', relief='flat', font=('Courier', 10, 'bold')).pack(fill='x', padx=8, pady=(4, 7))
+            tk.Button(content_frame, text='PLAY', state=state, command=lambda idx=i: self.play(idx), bg='#f3b563', fg='#16111f', relief='flat', font=BODY_FONT).pack(fill='x', padx=8, pady=(4, 7))
 
         self.deck_info.config(text='')
 
