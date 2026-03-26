@@ -462,7 +462,7 @@ class App:
         # DIALOGUE BOX (floating above desk, centered)
         # =========================================================
         self.transcript = tk.Frame(self.main, bg='#241a22', highlightbackground=ACCENT, highlightthickness=2)
-        self.transcript.place(relx=0.53, rely=0.58, anchor='center', width=520, height=96)
+        self.transcript.place_forget()
 
         self.speaker = tk.Label(
             self.transcript,
@@ -511,7 +511,7 @@ class App:
             highlightbackground=ACCENT,
             highlightthickness=2
         )
-        self.prob_text.place(relx=0.78, rely=0.36, anchor='nw', width=175, height=110)
+        self.prob_text.place(relx=0.02, rely=0.98, anchor='sw', width=195, height=110)
 
         # =========================================================
         # ENCOUNTER START / ONBOARDING BOX
@@ -750,11 +750,7 @@ class App:
                 f'Testimony: {"ON" if g.testimony_live else "OFF"}'
             )
         )
-
-        if g.dialogue[0].strip() or g.dialogue[1].strip():
-            self.transcript.place(relx=0.53, rely=0.58, anchor='center', width=520, height=96)
-        else:
-            self.transcript.place_forget()
+        self.transcript.place_forget()
 
         deck_count = len(g.deck)
         discard_count = len(g.discard)
@@ -834,7 +830,7 @@ class App:
             self.prob_text.place_forget()
         else:
             self.prob_text.config(text=prob_display)
-            self.prob_text.place(relx=0.78, rely=0.36, anchor='nw', width=175, height=110)
+            self.prob_text.place(relx=0.02, rely=0.98, anchor='sw', width=195, height=110)
         
         # Update reroll button state and styling
         reroll_enabled = g.started and g.judge_patience >= 3 and g.enemy_cred > 0 and g.player_cred > 0
