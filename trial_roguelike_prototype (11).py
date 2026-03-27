@@ -15,6 +15,12 @@ INFO = '#78d7ff'
 WARN = '#ffd56b'
 CARD_BG = '#24192c'
 
+# font parameters
+FONT_SCALE = 1.3
+TITLE_FONT = ('Courier', int(18 * FONT_SCALE), 'bold')
+HEADING_FONT = ('Courier', int(14 * FONT_SCALE), 'bold')
+BODY_FONT = ('Courier', int(10 * FONT_SCALE))
+
 @dataclass
 class Card:
     id: str
@@ -423,7 +429,7 @@ class App:
             text='STRIKE FROM THE RECORD // SIMPLE BUILD',
             bg=BG,
             fg=ACCENT,
-            font=('Courier', 18, 'bold')
+            font=TITLE_FONT
         )
         self.banner.pack(anchor='w')
 
@@ -443,7 +449,7 @@ class App:
             text='',
             bg=PANEL,
             fg=TEXT,
-            font=('Courier', 10, 'bold'),
+            font=BODY_FONT,
             justify='left',
             wraplength=260,
             anchor='nw'
@@ -451,13 +457,50 @@ class App:
         self.guidance_text.pack(fill='x', padx=10, pady=(10, 8))
 
         self.top_left_status = tk.Label(
-            self.left_panel,
+            self.main,
+            text='',
+            bg='#1a1410',
+            fg=ACCENT,
+            font=BODY_FONT,
+            justify='left',
+            padx=8,
+            pady=4
+        )
+        self.top_left_status.place(relx=0.02, rely=0.135, anchor='nw', width=220, height=42)
+
+        # =========================================================
+        # PAPER STATS PANEL (placed over notebook area on desk)
+        # =========================================================
+        text_x0, text_y0, text_x1, text_y1 = CLIPBOARD_TEXT_BOUNDS
+        text_relx, text_rely = self.scene_to_rel(text_x0, text_y0)
+
+        self.paper_stats = tk.Canvas(
+            self.main,
+            bg='#efe2c2',
+            highlightthickness=0,
+            bd=0,
+            relief='flat'
+        )
+        self.paper_stats.place(
+            relx=text_relx,
+            rely=text_rely,
+            anchor='nw',
+            width=(text_x1 - text_x0),
+            height=(text_y1 - text_y0)
+        )
+
+        # =========================================================
+        # DIALOGUE BOX (floating above desk, centered)
+        # =========================================================
+        self.transcript = tk.Frame(self.main, bg='#241a22', highlightbackground=ACCENT, highlightthickness=2)
+        self.transcript.place_forget()
+
+        self.speaker = tk.Label(
+            self.transcript,
             text='',
             bg=PANEL,
             fg=ACCENT,
-            font=('Courier', 10, 'bold'),
-            justify='left',
-            anchor='nw'
+            font=BODY_FONT
         )
         self.top_left_status.pack(fill='x', padx=10, pady=(0, 8))
 
@@ -466,18 +509,112 @@ class App:
             text='',
             bg=PANEL,
             fg=TEXT,
-            font=('Courier', 9),
+            font=BODY_FONT,
+            wraplength=480,
+        )
+        self.bark.pack(anchor='w', padx=10, pady=4)
+
+        self.caption = tk.Label(
+            self.transcript,
+            text='',
+            bg=PANEL,
+            fg=MUTED,
+            font=BODY_FONT,
+            wraplength=480,
+            justify='left'
+        )
+        self.caption.pack(anchor='w', padx=10, pady=(0, 8))
+
+        # =========================================================
+        # NEXT TURN ODDS / ALERT BOX
+        # =========================================================
+        self.prob_text = tk.Label(
+            self.main,
+            text='',
+            bg='#241a22',
+            fg=GOOD,
+            font=BODY_FONT,
             justify='left',
             anchor='nw'
         )
-        self.paper_stats.pack(fill='both', expand=True, padx=10, pady=(0, 10))
+        self.prob_text.place(relx=0.02, rely=0.98, anchor='sw', width=195, height=110)
+
+        # =========================================================
+        # ENCOUNTER START / ONBOARDING BOX
+        # =========================================================
+        overlay_outer = tk.Frame(self.main, bg=ACCENT, relief='flat', borderwidth=0)
+        overlay_outer.place(relx=0.92, rely=0.12, anchor='ne', width=250, height=132)
+
+        self.overlay = tk.Frame(overlay_outer, bg=PANEL)
+        self.overlay.pack(fill='both', expand=True, padx=2, pady=2)
+
+        tk.Label(
+            self.overlay,
+            text='THE SHOWBOAT',
+            bg=PANEL,
+            fg=ACCENT,
+            font=HEADING_FONT,
+            wraplength=250,
+            justify='left'
+        ).pack(anchor='w', padx=10, pady=(10, 4))
+
+        tk.Label(
+            self.overlay,
+            text='Wait for TESTIMONY.\nThen PRIOR STATEMENT → IMPEACH.',
+            bg=PANEL,
+            fg=INFO,
+            font=BODY_FONT,
+            wraplength=250,
+            justify='left'
+        ).pack(anchor='w', padx=10, pady=(0, 6))
+
+        self.start_btn = tk.Button(
+            self.overlay,
+            text='BEGIN CROSS',
+            command=self.begin_cross,
+            bg=ACCENT,
+            fg=BG,
+            font=HEADING_FONT,
+            relief='flat'
+        )
+        self.start_btn.pack(anchor='w', padx=10, pady=(0, 10), fill='x')
+
+        # =========================================================
+        # COMBAT LOG (compact, right side)
+        # =========================================================
+        self.combat_log_text = tk.Label(
+            self.main,
+            text='',
+            bg='#20161d',
+            fg=TEXT,
+            font=BODY_FONT,
+            justify='left',
+            anchor='nw',
+            padx=8,
+            pady=8,
+            highlightbackground=ACCENT,
+            highlightthickness=2
+        )
+        self.combat_log_text.place(relx=0.78, rely=0.50, anchor='nw', width=210, height=118)
+
+        # =========================================================
+        # HAND / CARDS ON TABLE
+        # =========================================================
+        self.hand_title = tk.Label(
+            self.main,
+            text='YOUR HAND',
+            bg='#1a1410',
+            fg='#f6d7a7',
+            font=BODY_FONT
+        )
+        self.hand_title.place(relx=0.73, rely=0.69, anchor='w')
 
         self.deck_info = tk.Label(
             self.left_panel,
             text='',
             bg=PANEL,
             fg=MUTED,
-            font=('Courier', 8)
+            font=BODY_FONT
         )
         self.deck_info.pack(fill='x', padx=10, pady=(0, 4))
 
@@ -568,9 +705,78 @@ class App:
 
         self.hand_cards = []
 
+        # =========================================================
+        # BOTTOM CONTROLS
+        # =========================================================
+        self.bottom = tk.Frame(self.root, bg='#1a1410')
+        self.bottom.place(relx=0.86, rely=0.97, anchor='se', width=310, height=54)
+
+        self.controls = tk.Frame(self.bottom, bg='#1a1410')
+        self.controls.pack(fill='both', expand=True, padx=8, pady=8)
+
+        self.reroll_btn = tk.Button(
+            self.controls,
+            text='REROLL NEXT TURN',
+            command=self.reroll_next,
+            bg=WARN,
+            fg='#000000',
+            font=BODY_FONT,
+            relief='flat',
+            borderwidth=0,
+            width=16
+        )
+        self.reroll_btn.pack(side='left', padx=6)
+
+        tk.Button(
+            self.controls,
+            text='END TURN',
+            command=self.end_turn,
+            bg=ACCENT,
+            fg=BG,
+            font=HEADING_FONT,
+            relief='flat',
+            width=12
+        ).pack(side='left', padx=6)
+
+        tk.Button(
+            self.controls,
+            text='RESTART',
+            command=self.restart,
+            bg=PANEL2,
+            fg=TEXT,
+            font=HEADING_FONT,
+            relief='flat',
+            width=12
+        ).pack(side='left', padx=6)
+
 
     def load_scene(self):
-        return
+        """Load and scale the courtroom image to fullscreen background."""
+        img_path = os.path.join(os.path.dirname(__file__), 'courtroom_scene.png')
+        if not os.path.exists(img_path):
+            self.scene_label.config(text='[ courtroom_scene.png not found ]', fg=MUTED, font=TITLE_FONT )
+            return
+            
+        try:
+            # Get actual window size
+            w = self.root.winfo_width()
+            h = self.root.winfo_height()
+            
+            # If window not yet sized, use sensible defaults
+            if w < 100 or h < 100:
+                w, h = 1600, 1000
+            
+            # Load and resize image
+            img = Image.open(img_path).convert('RGB')
+            img_resized = img.resize((w, h), Image.Resampling.LANCZOS)
+            
+            # Store reference and display
+            self.scene_img = ImageTk.PhotoImage(img_resized)
+            self.scene_label.config(image=self.scene_img, text='')
+            self.scene_label.lower()
+            
+        except Exception as e:
+            self.scene_label.config(text=f'[ background error: {str(e)} ]', fg=MUTED, font=TITLE_FONT )
 
     def begin_cross(self):
         self.game.started = True
@@ -679,7 +885,24 @@ class App:
             f'Sympathy: {g.enemy_sympathy}',
             f'Exposed: {"YES" if g.exposed else "NO"}',
         ]
-        self.paper_stats.config(text='\n'.join(clipboard_lines))
+        self.paper_stats.delete('all')
+        paper_width = int(self.paper_stats.winfo_width() or 265)
+        y = 18
+        for index, line in enumerate(clipboard_lines):
+            is_header = line in ('CASE NOTES', 'OPPOSITION')
+            font = HEADING_FONT if is_header else BODY_FONT
+            fill = '#5d4226' if is_header else '#4a3320'
+            self.paper_stats.create_text(
+                28,
+                y,
+                text=line,
+                anchor='nw',
+                font=font,
+                fill=fill,
+                angle=7,
+                width=paper_width - 40
+            )
+            y += 28 if is_header else 22
 
         # Combat log
         combat_display = '\n'.join(g.log[-8:]) if g.started and g.log else ''
@@ -762,20 +985,42 @@ class App:
 
         for i, card in enumerate(g.hand):
             status, color = self.card_status(card)
-
-            card_frame = tk.Frame(card_row, bg=CARD_BG, highlightbackground=ACCENT, highlightthickness=1, width=card_width, height=card_height)
-            card_frame.pack(side='left', padx=4)
-            card_frame.pack_propagate(False)
-            self.hand_cards.append(card_frame)
-
-            tk.Label(card_frame, text=str(card.cost), bg=CARD_BG, fg=ACCENT, font=('Courier', 14, 'bold')).pack(anchor='w', padx=8, pady=(8, 2))
-            tk.Label(card_frame, text=card.name, bg=CARD_BG, fg=TEXT, font=('Courier', 10, 'bold'), wraplength=132, justify='center').pack(padx=8, pady=(0, 2))
-            tk.Label(card_frame, text=' • '.join(card.tags), bg=CARD_BG, fg=MUTED, font=('Courier', 8), wraplength=132, justify='center').pack(padx=8, pady=(0, 2))
-            tk.Label(card_frame, text=card.text, bg=CARD_BG, fg=TEXT, font=('Courier', 9), wraplength=130, justify='left').pack(padx=8, pady=(2, 4), anchor='n')
-            if status:
-                tk.Label(card_frame, text=status, bg=CARD_BG, fg=color, font=('Courier', 8, 'bold')).pack(pady=(0, 4))
+            card_x = start_x + i * horizontal_step
+            card_y = row_y
+            
+            card_canvas = tk.Canvas(self.main, width=card_width, height=card_height, bg='#6f3816', highlightthickness=0, relief='flat', borderwidth=0)
+            card_canvas.place(x=card_x, y=card_y)
+            self.hand_cards.append(card_canvas)
+            
+            # Draw rounded rectangle for card background
+            self._draw_rounded_rect(card_canvas, 1, 1, card_width-1, card_height-1, radius=15, fill='#cdb89c', outline='#201610', width=2)
+            
+            # Create a frame to hold card content
+            content_frame = tk.Frame(card_canvas, bg='#cdb89c', relief='flat', borderwidth=0)
+            card_canvas.create_window(card_width // 2, card_height // 2, window=content_frame, width=card_width - 10, height=card_height - 10)
+            
+            # Top section with cost
+            top_row = tk.Frame(content_frame, bg='#cdb89c')
+            top_row.pack(fill='x', padx=8, pady=(7, 3))
+            cost_label = tk.Label(top_row, text=str(card.cost), bg='#cdb89c', fg='#201610', font=HEADING_FONT)
+            cost_label.pack(side='left')
+            
+            # Card name
+            tk.Label(content_frame, text=card.name, bg='#cdb89c', fg='#201610', font=BODY_FONT, wraplength=132, justify='center').pack(padx=9, pady=(0, 3))
+            
+            # Card tags - smaller and muted
+            tk.Label(content_frame, text=' • '.join(card.tags), bg='#cdb89c', fg='#6d5743', font=BODY_FONT, wraplength=132, justify='center').pack(padx=9, pady=(0, 3))
+            
+            # Card description - cleaner layout
+            tk.Label(content_frame, text=card.text, bg='#cdb89c', fg='#2d221d', font=BODY_FONT, wraplength=130, justify='left').pack(padx=10, pady=(3, 6), anchor='n')
+            
+            # Status indicator - compact
+            if status and status != '':
+                tk.Label(content_frame, text=status, bg='#cdb89c', fg=color, font=BODY_FONT).pack(pady=(0, 5))
+            
+            # Play button - full width at bottom
             state = 'normal' if g.started and card.cost <= g.focus and g.enemy_cred > 0 and g.player_cred > 0 else 'disabled'
-            tk.Button(card_frame, text='PLAY', state=state, command=lambda idx=i: self.play(idx), bg=ACCENT, fg=BG, relief='flat', font=('Courier', 10, 'bold')).pack(fill='x', padx=8, pady=(4, 8))
+            tk.Button(content_frame, text='PLAY', state=state, command=lambda idx=i: self.play(idx), bg='#f3b563', fg='#16111f', relief='flat', font=BODY_FONT).pack(fill='x', padx=8, pady=(4, 7))
 
         self.deck_info.config(text='')
 
